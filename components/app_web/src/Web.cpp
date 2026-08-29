@@ -546,8 +546,21 @@ esp_err_t get_info(httpd_req_t *req) {
   cJSON_AddNumberToObject(bus, "dropped", s.dropped);
   cJSON_AddNumberToObject(bus, "bytes", s.bytes);
 
+  /* What this firmware is running on, which the interface needs to write an
+     ESPHome configuration somebody else can use, and which turns a class of
+     radio problem from a morning's detective work into a request. */
+  cJSON *hw = cJSON_AddObjectToObject(root, "hardware");
+  cJSON_AddStringToObject(hw, "board", s.board.c_str());
+  cJSON_AddStringToObject(hw, "chip", CONFIG_IDF_TARGET);
+  cJSON_AddNumberToObject(hw, "rx_pin", s.pin_rx);
+  cJSON_AddNumberToObject(hw, "tx_pin", s.pin_tx);
+  cJSON_AddNumberToObject(hw, "led_pin", s.pin_led);
+  cJSON_AddNumberToObject(hw, "activity_pin", s.pin_activity);
+  cJSON_AddBoolToObject(hw, "led_inverted", s.led_inverted);
+
   cJSON *net = cJSON_AddObjectToObject(root, "net");
   cJSON_AddStringToObject(net, "state", s.net_state.c_str());
+  cJSON_AddNumberToObject(net, "channel", s.channel);
   cJSON_AddStringToObject(net, "ip", s.ip.c_str());
   cJSON_AddStringToObject(net, "ssid", s.ssid.c_str());
   cJSON_AddNumberToObject(net, "rssi", s.rssi);

@@ -253,6 +253,13 @@ extern "C" void app_main() {
     st.ip = appnet::ip();
     st.ssid = appnet::ssid();
     st.rssi = appnet::rssi();
+    st.channel = appnet::channel();
+    st.pin_rx = board::PIN_RX;
+    st.pin_tx = board::PIN_TX;
+    st.board = board::NAME;
+    st.pin_led = board::PIN_LED_STATUS;
+    st.pin_activity = board::PIN_LED_ACTIVITY;
+    st.led_inverted = board::LED_ACTIVE_LOW;
         return st;
       },
       [](bool active) { indicator::set_system(active ? indicator::System::Ota : indicator::System::Booting); },

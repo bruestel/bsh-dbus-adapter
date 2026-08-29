@@ -36,6 +36,10 @@ std::string ip();
 std::string ssid();
 int8_t rssi();
 
+/* The channel the station is using. Both radios share one, so this is what
+   decides whether a setup access point can stay up alongside it. */
+uint8_t channel();
+
 /* True while the device is only reachable through its own access point. Setup
    endpoints must stay open in that case -- requiring a password here would lock
    the user out of a device they cannot reach any other way. */

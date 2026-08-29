@@ -45,6 +45,17 @@ inline constexpr bool LED_ACTIVE_LOW = true;
 inline constexpr bool LED_ACTIVE_LOW = false;
 #endif
 
+/* Which adapter this image was built for. Reported over HTTP so a device can
+   say what it is rather than leaving it to be inferred from its pins, and so
+   the profile export can write a configuration for the right hardware. */
+#if defined(CONFIG_BSH_BOARD_BOUNI_C6)
+inline constexpr const char *NAME = "bouni-c6";
+#elif defined(CONFIG_BSH_BOARD_KIU_C3)
+inline constexpr const char *NAME = "kiu-c3";
+#else
+inline constexpr const char *NAME = "custom";
+#endif
+
 inline constexpr int DEFAULT_BAUD = CONFIG_BSH_BUS_DEFAULT_BAUD;
 inline constexpr int PIN_BOOT = CONFIG_BSH_PIN_BOOT;
 

@@ -30,6 +30,22 @@ struct Status {
   std::string ip;
   std::string ssid;
   int8_t rssi = 0;
+  /* The wireless channel the station is on. Both radios share one, which is
+     why a setup access point pinned to another channel used to make a
+     connected device unreachable -- a fact that took a morning to find and
+     would have taken a request. */
+  uint8_t channel = 0;
+  /* Which pins the bus is on. The interface needs them to export a profile as
+     an ESPHome configuration for somebody else's adapter, and they live in
+     Kconfig, which this component cannot see. */
+  int pin_rx = -1;
+  int pin_tx = -1;
+  /* The adapter this image was built for, as chosen in Kconfig. */
+  std::string board;
+  /* The status LED, so an exported configuration can drive the same one. */
+  int pin_led = -1;
+  int pin_activity = -1;
+  bool led_inverted = false;
 };
 
 /* The appliance layer is application-level, so it is handed in rather than

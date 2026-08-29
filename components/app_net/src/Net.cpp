@@ -487,6 +487,14 @@ int8_t rssi() {
   return 0;
 }
 
+uint8_t channel() {
+  uint8_t primary = 0;
+  wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
+  if (esp_wifi_get_channel(&primary, &second) == ESP_OK)
+    return primary;
+  return 0;
+}
+
 bool provisioning() { return g_state == State::ApMode; }
 
 Time time_info() {
