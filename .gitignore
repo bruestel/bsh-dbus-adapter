@@ -1,0 +1,41 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# ESP-IDF component manager: restored from dependencies.lock, which is tracked
+managed_components/
+
+# ESP-IDF: regenerated per environment from sdkconfig.defaults
+sdkconfig
+sdkconfig.*
+!sdkconfig.defaults
+!sdkconfig.defaults.*
+
+# Build output
+build/
+*.bin
+*.elf
+*.map
+
+# Host tests
+test/host/build/
+
+# Generated web assets
+www/*.gz
+
+# Editors
+.vscode/
+.idea/
+compile_commands.json
+components/app_web/src/ui_asset.c
+components/app_profiles/src/profiles_asset.c
+
+# Python
+__pycache__/
+
+# Recordings from an appliance: local working material, not part of the project
+tools/captures/
+
+# Archived images: the ELF is needed to read a coredump from the matching build
+dist/

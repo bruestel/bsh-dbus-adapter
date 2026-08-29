@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "b15p42n3",
+    "model": "B15P42N3",
+    "appliance": "oven",
+    "source": "bsh-dbus-b15p42n3.yaml",
+    "credits": [
+      "stefanhirt",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Neff",
+    "product": "Neff"
+  },
+  "bus": {
+    "baud": 19200
+  },
+  "entities": [
+    {
+      "id": "temperature",
+      "name": "Temperature, actual",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7206",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "icon": "mdi:thermometer",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "target_temperature",
+      "name": "Temperature, target",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x10",
+        "cmd": "0x7201",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 2
+      },
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "icon": "mdi:thermometer",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "standby",
+      "name": "Powered on",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x00",
+        "cmd": "0x7004",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "ha": {
+        "device_class": "power"
+      }
+    },
+    {
+      "id": "fan",
+      "name": "Fan",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7228",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "u8",
+        "at": 4
+      },
+      "transforms": [
+        {
+          "op": "offset",
+          "value": -7
+        }
+      ],
+      "ha": {
+        "icon": "mdi:fan"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x10",
+        "cmd": "0x720d",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "light"
+      }
+    },
+    {
+      "id": "heat",
+      "name": "Hot",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7271",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "heat"
+      }
+    },
+    {
+      "id": "mode",
+      "name": "Mode",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x10",
+        "cmd": "0x7201",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "2": "Ober-/Unterhitze",
+            "5": "CircoTherm® Heißluft",
+            "6": "Thermogrillen",
+            "7": "Grill klein",
+            "8": "Grill groß",
+            "11": "Unterhitze",
+            "12": "Pizzastufe",
+            "24": "Sanftgaren",
+            "46": "CircoTherm® Heißluft Eco"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:form-select"
+      }
+    }
+  ]
+}

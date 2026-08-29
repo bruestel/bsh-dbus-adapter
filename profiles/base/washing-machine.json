@@ -1,0 +1,595 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "washing-machine",
+    "model": "Generic washing machine",
+    "appliance": "washing_machine",
+    "generic": true,
+    "note": "Shared decoding, factored from the model profiles. Usable on its own for an appliance of this family whose exact model has not been mapped: the values are correct, but codes are reported raw because programme names differ per model."
+  },
+  "entities": [
+    {
+      "id": "remain",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "program",
+      "from": "program",
+      "name": "Programme",
+      "kind": "text_sensor"
+    },
+    {
+      "id": "state_2",
+      "from": "state",
+      "name": "Status 2",
+      "kind": "text_sensor"
+    },
+    {
+      "id": "temperature",
+      "name": "Temperature",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1004",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x26",
+        "cmd": "0x1200",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "feat_speedperfect",
+      "name": "SpeedPerfect",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "eq",
+        "at": 3,
+        "value": 0
+      }
+    },
+    {
+      "id": "feat_prewash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "mask",
+        "at": 5,
+        "mask": 128
+      }
+    },
+    {
+      "id": "program_phase",
+      "name": "Programme phase",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1003",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "unbalance_x",
+      "name": "Unbalance X",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x4010",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 1
+      },
+      "ha": {
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "unbalance_z",
+      "name": "Unbalance Z",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x4010",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 3
+      },
+      "ha": {
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "unbalance_y",
+      "name": "Unbalance Y",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x4010",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 5
+      },
+      "ha": {
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "washmodule",
+      "name": "Wash module",
+      "match": {
+        "dest": "0x26",
+        "cmd": "0x1020",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "remain_2",
+      "name": "Time remaining 2",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x2a",
+        "cmd": "0x1600",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "feat_stains",
+      "name": "Stain removal",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 5
+      }
+    },
+    {
+      "id": "feat_anticrease",
+      "name": "Anti-crease",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 7
+      }
+    },
+    {
+      "id": "start_button",
+      "name": "Start button",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x15",
+        "cmd": "0x1100"
+      },
+      "extract": {
+        "op": "const",
+        "value": 1
+      }
+    },
+    {
+      "id": "program_started",
+      "name": "Programme started",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x26",
+        "cmd": "0x1701"
+      },
+      "extract": {
+        "op": "const",
+        "value": 1
+      }
+    },
+    {
+      "id": "program_2",
+      "name": "Programme 2",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1005",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      }
+    },
+    {
+      "id": "state",
+      "name": "Status",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x26",
+        "cmd": "0x1101",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "rpm",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1006",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "ha": {
+        "device_class": "speed",
+        "unit_of_measurement": "rpm",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "feat_prewash_2",
+      "name": "Pre-wash 2",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 7
+      }
+    },
+    {
+      "id": "temperature_2",
+      "name": "Temperature 2",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "rpm_2",
+      "name": "Spin speed 2",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "speed",
+        "unit_of_measurement": "rpm",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "start_button_2",
+      "name": "Start button 2",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "eq",
+        "at": 0,
+        "value": 35
+      }
+    },
+    {
+      "id": "start_led",
+      "name": "Start light",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1003",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 16
+      }
+    },
+    {
+      "id": "temperature_3",
+      "name": "Temperature 3",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1003",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bits",
+        "at": 0,
+        "shift": 1,
+        "mask": 255
+      },
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "rpm_3",
+      "name": "Spin speed 3",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1003",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "speed",
+        "unit_of_measurement": "rpm",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "feat_stains_2",
+      "name": "Stain removal 2",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1003",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 1
+      }
+    },
+    {
+      "id": "feat_pre_wash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1003",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 2
+      }
+    },
+    {
+      "id": "feat_anti_crease",
+      "name": "Anti-crease",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1003",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 4
+      }
+    },
+    {
+      "id": "feat_waterplus",
+      "name": "Water plus",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1003",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 8
+      }
+    },
+    {
+      "id": "machine_rotation_direction",
+      "name": "Drum direction",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x13",
+        "cmd": "0x3015",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      }
+    },
+    {
+      "id": "rpm_ontime",
+      "name": "Spin speed, time at speed",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 3
+      },
+      "ha": {
+        "device_class": "speed",
+        "unit_of_measurement": "rpm",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "feat_waterplus_2",
+      "name": "Water plus 2",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 1
+      }
+    },
+    {
+      "id": "feat_waterplus_3",
+      "name": "Water plus 3",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 4
+      }
+    },
+    {
+      "id": "feat_waterplus_4",
+      "name": "Water plus 4",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "mask",
+        "at": 5,
+        "mask": 2
+      }
+    },
+    {
+      "id": "program_started_2",
+      "name": "Programme started 2",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "eq",
+        "at": 0,
+        "value": 36
+      }
+    },
+    {
+      "id": "rpm_actual",
+      "name": "Spin speed, actual",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x13",
+        "cmd": "0x3015",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 3
+      },
+      "ha": {
+        "device_class": "speed",
+        "unit_of_measurement": "rpm",
+        "accuracy_decimals": 0
+      }
+    }
+  ],
+  "extends": "base/family-a"
+}

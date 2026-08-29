@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "dishwasher",
+    "model": "Generic dishwasher",
+    "appliance": "dishwasher",
+    "generic": true,
+    "note": "Shared decoding, factored from the model profiles. Usable on its own for an appliance of this family whose exact model has not been mapped: the values are correct, but codes are reported raw because programme names differ per model."
+  },
+  "entities": [
+    {
+      "id": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x25",
+        "cmd": "0x2008",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "rinse_aid",
+      "name": "Rinse aid",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x24",
+        "cmd": "0x2006",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 1
+      }
+    },
+    {
+      "id": "door",
+      "name": "Door",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x24",
+        "cmd": "0x2006",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 3,
+        "invert": true
+      },
+      "ha": {
+        "device_class": "door"
+      }
+    },
+    {
+      "id": "salt",
+      "name": "Salt",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x24",
+        "cmd": "0x2006",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 0
+      }
+    }
+  ]
+}

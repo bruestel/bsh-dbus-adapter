@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "sn66p080eu",
+    "model": "SN66P080EU",
+    "appliance": "dishwasher",
+    "source": "bsh-dbus-sn66p080eu.yaml",
+    "credits": [
+      "Nurster",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Siemens",
+    "product": "Siemens iQ500"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "remain",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor"
+    },
+    {
+      "id": "rinse_aid",
+      "from": "rinse_aid",
+      "name": "Rinse aid",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:glass-cocktail"
+      }
+    },
+    {
+      "id": "salt",
+      "from": "salt",
+      "name": "Salt",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:shaker-outline"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "binary_sensor"
+    }
+  ],
+  "extends": "base/dishwasher"
+}

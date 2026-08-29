@@ -1,0 +1,98 @@
+menu "BSH D-Bus"
+
+choice BSH_BOARD
+    prompt "Adapter board"
+    default BSH_BOARD_BOUNI_C6 if IDF_TARGET_ESP32C6
+    default BSH_BOARD_KIU_C3 if IDF_TARGET_ESP32C3
+    default BSH_BOARD_CUSTOM
+    help
+      Selects the default pin mapping. Choose Custom to set pins by hand.
+
+config BSH_BOARD_BOUNI_C6
+    bool "Bouni BSH-Board (ESP32-C6)"
+    depends on IDF_TARGET_ESP32C6
+
+config BSH_BOARD_KIU_C3
+    bool "kiu BaSHi (ESP32-C3)"
+    depends on IDF_TARGET_ESP32C3
+
+config BSH_BOARD_CUSTOM
+    bool "Custom"
+
+endchoice
+
+config BSH_PIN_RX
+    int "D-Bus RX pin"
+    default 4 if BSH_BOARD_BOUNI_C6
+    default 10 if BSH_BOARD_KIU_C3
+    default -1
+    help
+      GPIO receiving from the DATA wire (via the open-drain level shifter).
+
+config BSH_PIN_TX
+    int "D-Bus TX pin (configured but never written)"
+    default 5 if BSH_BOARD_BOUNI_C6
+    default 9 if BSH_BOARD_KIU_C3
+    default -1
+    help
+      GPIO wired to the DATA line driver. This firmware is strictly read-only
+      and never transmits; the pin is handed to the UART driver only to match
+      the established ESPHome configuration for these boards.
+
+      On the Bouni board this is safe in every state: the driver (U1) is a
+      74LVC1G07 open-drain buffer and R14 pulls the net to 3.3V, so the bus is
+      released whenever the pin is high -- including while it floats during
+      reset and boot. Nothing in this firmware ever writes to it.
+
+config BSH_PIN_LED_STATUS
+    int "Status LED pin (-1 to disable)"
+    default 6 if BSH_BOARD_BOUNI_C6
+    default 8 if BSH_BOARD_KIU_C3
+    default -1
+
+config BSH_PIN_LED_ACTIVITY
+    int "Activity LED pin (-1 to disable)"
+    default 7 if BSH_BOARD_BOUNI_C6
+    default -1
+
+config BSH_PIN_BOOT
+    int "BOOT button pin (-1 to disable the recovery hold)"
+    default -1 if BSH_BOARD_KIU_C3
+    default 9
+    help
+      Holding this button for five seconds during normal operation erases the
+      stored WiFi credentials and reboots, which brings the setup access point
+      back. It is the only way back into a device that joined a network you
+      cannot reach.
+
+      On the C6 this is GPIO9, which is also the strapping pin: holding it while
+      resetting puts the chip into download mode instead. That is a separate,
+      deliberate function -- press it only after the board is already running.
+
+      Disabled on the kiu BaSHi, and not by oversight. GPIO9 is the C3's boot
+      pin, and the BaSHi wires that same pin to the level shifter as the bus TX
+      line. The button on the module shorts it to ground, so holding it would
+      pull DATA low for as long as it is held -- this firmware would be
+      disturbing the bus it promises never to touch. The way back into a BaSHi
+      is a cable.
+
+config BSH_LED_ACTIVE_LOW
+    bool "LEDs are active low"
+    default y if BSH_BOARD_BOUNI_C6
+    # The BaSHi's own logger sketch drives its status LED with LED_ON == LOW.
+    default y if BSH_BOARD_KIU_C3
+    default n
+
+config BSH_BUS_DEFAULT_BAUD
+    int "Bus baud rate (0 = detect automatically)"
+    default 0
+    help
+      0 listens on 9600, 19200 and 38400 in turn at startup and keeps whichever
+      rate yields CRC-valid frames. Costs a few seconds once per boot and
+      removes a whole class of confusing failures, since a wrong rate looks like
+      a broken parser rather than a wrong setting.
+
+      Set a fixed rate once you know it. Most appliances use 9600; the COM1
+      module is documented to probe upwards, so newer ones may be faster.
+
+endmenu

@@ -1,0 +1,206 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "b36ct80snb",
+    "model": "B36CT80SNB",
+    "appliance": "fridge",
+    "source": "bsh-dbus-b36ct80snb.yaml",
+    "credits": [
+      "Keith Baker",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch 800 Series"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "left_door",
+      "name": "Left door",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x01",
+        "cmd": "0x0204",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": true
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "crisper_light",
+      "name": "Crisper light",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x01",
+        "cmd": "0x0204",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": true
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:light"
+      }
+    },
+    {
+      "id": "control_light",
+      "name": "Control light",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x01",
+        "cmd": "0x0204",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": true
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "right_door",
+      "name": "Right door",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x01",
+        "cmd": "0x0204",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": true
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "freezer_door",
+      "name": "Freezer door",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x01",
+        "cmd": "0x0204",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": true
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "freezer_light",
+      "name": "Freezer light",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x01",
+        "cmd": "0x0204",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                2
+              ],
+              "out": true
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    }
+  ]
+}

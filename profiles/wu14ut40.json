@@ -1,0 +1,272 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wu14ut40",
+    "model": "WU14UT40",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-wu14ut40.yaml",
+    "credits": [
+      "satchafunkilus",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Siemens",
+    "product": "Siemens iQ500"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "temperature",
+      "from": "temperature_2",
+      "name": "Temperature",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "calibrate_linear",
+          "datapoints": [
+            [
+              0.0,
+              10.0
+            ],
+            [
+              1.0,
+              20.0
+            ],
+            [
+              2.0,
+              30.0
+            ],
+            [
+              3.0,
+              40.0
+            ],
+            [
+              4.0,
+              50.0
+            ],
+            [
+              5.0,
+              60.0
+            ],
+            [
+              6.0,
+              70.0
+            ],
+            [
+              7.0,
+              80.0
+            ],
+            [
+              8.0,
+              90.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rpm",
+      "from": "rpm_2",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "multiply",
+          "value": 10.0
+        }
+      ]
+    },
+    {
+      "id": "remain",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ]
+    },
+    {
+      "id": "rpm_real",
+      "from": "rpm_actual",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 16
+        }
+      ]
+    },
+    {
+      "id": "rpm_target",
+      "name": "Spin speed, target",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x33",
+        "cmd": "0x3001",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 3
+      },
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 16
+        }
+      ],
+      "ha": {
+        "device_class": "speed",
+        "unit_of_measurement": "rpm",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "feat_waterplus",
+      "from": "feat_waterplus_4",
+      "name": "Extra rinse",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "feat_prewash",
+      "from": "feat_prewash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:rotate-orbit"
+      }
+    },
+    {
+      "id": "feat_variospeed",
+      "from": "feat_speedperfect",
+      "name": "Vario speed",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:clock-fast"
+      }
+    },
+    {
+      "id": "start_button",
+      "from": "start_button_2",
+      "name": "Start button",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:button-pointer"
+      }
+    },
+    {
+      "id": "program_started",
+      "from": "program_started_2",
+      "name": "Programme started",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:ray-start-arrow",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Baumwolle",
+            "2": "Eco 40-60",
+            "3": "Bunt",
+            "4": "Pflegeleicht",
+            "5": "Fein/Seide",
+            "6": "Wolle",
+            "7": "Schnell/Mix",
+            "8": "Spinning or draining",
+            "9": "Rinsing",
+            "10": "Pflegeleicht Plus",
+            "11": "Trommel Reinigen",
+            "12": "Hemden/Business",
+            "13": "Dessous",
+            "14": "Outdoor",
+            "15": "Super 15'/30'"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:numeric"
+      }
+    },
+    {
+      "id": "state",
+      "from": "state_2",
+      "name": "Status",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                41
+              ],
+              "out": ""
+            },
+            {
+              "in": [
+                67
+              ],
+              "out": ""
+            }
+          ],
+          "default": "hold"
+        },
+        {
+          "op": "map",
+          "values": {
+            "12": "Ready or paused",
+            "20": "Finished",
+            "22": "Running"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:state-machine"
+      }
+    },
+    {
+      "id": "direction",
+      "name": "Drum direction",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x33",
+        "cmd": "0x3001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "114": "Right",
+            "108": "Left"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:reload"
+      }
+    }
+  ],
+  "extends": "base/washing-machine"
+}

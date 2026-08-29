@@ -1,0 +1,75 @@
+# Conversion report
+
+227/274 entities converted (82.8%) from 22 files
+
+- **bsh-dbus-wm14s750.yaml** -> `wm14s750.json` -- 16/16 entities (100%), 11 groups, washing_machine
+- **bsh-dbus-b15p42n3.yaml** -> `b15p42n3.json` -- 7/7 entities (100%), 7 groups, oven
+- **bsh-dbus-b36ct80snb.yaml** -> `b36ct80snb.json` -- 6/6 entities (100%), 1 groups, unknown
+- **bsh-dbus-c47c22n3.yaml** -> `c47c22n3.json` -- 11/11 entities (100%), 11 groups, unknown
+- **bsh-dbus-sbv43m10eu.yaml** -> `sbv43m10eu.json` -- 5/6 entities (83%), 4 groups, unknown
+  - bsh-dbus-sbv43m10eu.yaml:bsh_dw_program_id: internal entity -- not exported
+- **bsh-dbus-shxm78w56n.yaml** -> `shxm78w56n.json` -- 8/8 entities (100%), 4 groups, unknown
+- **bsh-dbus-sn66p080eu.yaml** -> `sn66p080eu.json` -- 4/4 entities (100%), 2 groups, dishwasher
+- **bsh-dbus-sx66t096eu.yaml** -> `sx66t096eu.json` -- 4/4 entities (100%), 2 groups, dishwasher
+- **bsh-dbus-wae284f0nl.yaml** -> `wae284f0nl.json` -- 7/9 entities (78%), 3 groups, washing_machine
+  - bsh-dbus-wae284f0nl.yaml:bsh_wm_remain: lambda not converted -- unsigned int r = 0; for (unsigned int i = 3; i <= 5; i++) { const unsi
+  - bsh-dbus-wae284f0nl.yaml:bsh_wm_program_status: lambda not converted -- if (x[2] & 0x8) { return { "Spinning" }; } if (x[2] & 0x4) { return { 
+- **bsh-dbus-wag28400DE.yaml** -> `wag28400DE.json` -- 17/30 entities (57%), 19 groups, washing_machine
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_temperature: lambda not converted -- float temp = 0; if (x[2] == 0) { temp = 15; } else if (x[2] == 1) { te
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_max_load: lambda not converted -- switch (x[0]) { case 1: return 8.0f; // Baumwolle case 2: return 8.0f;
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_energy_rating: lambda not converted -- switch (x[0]) { case 1: return 3; // Baumwolle case 2: return 2; // Bu
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_running: lambda not converted -- if (x[0] == 22 || x[0] == 34 || x[0] == 36 || (x[0] == 67 && x[1] == 2
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_status: lambda not converted -- if (x[0] == 20) { id(washing_machine_running_last_state) = false; id(b
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_door_text: lambda not converted -- if (x.size() < 2) return ""; if (x[0] != 0x29) return ""; return std::
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_process_status: lambda not converted -- if (x[0] == 22) { id(washing_machine_running_last_state) = true; id(bs
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_process_raw: lambda not converted -- char buf[32]; sprintf(buf, "%u/%u/%u", x[0], (x[1] << 8) | x[2], x[3])
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_module_raw: lambda not converted -- char buf[16]; sprintf(buf, "%u", x[1]); return std::string(buf);
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_hint_raw: lambda not converted -- char buf[24]; sprintf(buf, "%02X%02X%02X%02X", x[0], x[1], x[2], x[3])
+  - bsh-dbus-wag28400DE.yaml:bsh_washing_machine_door_raw: lambda not converted -- char buf[32]; sprintf(buf, "%u/%u", x[0], x[1]); return std::string(bu
+- **bsh-dbus-waq24468-09es.yaml** -> `waq24468-09es.json` -- 28/31 entities (90%), 14 groups, unknown
+  - bsh-dbus-waq24468-09es.yaml:bsh_wm_rpm2: internal entity -- not exported
+  - bsh-dbus-waq24468-09es.yaml:ac_spin: internal entity -- not exported
+  - bsh-dbus-waq24468-09es.yaml:bsh_wm_feat_prewash: lambda not converted -- int sensor_value = x[0]; int mask = 0b01100000; // Máscara para los bi
+- **bsh-dbus-waq2832z.yaml** -> `waq2832z.json` -- 7/15 entities (47%), 11 groups, washing_machine
+  - bsh-dbus-waq2832z.yaml:bsh_wm_rpm_raw: internal entity -- not exported
+  - bsh-dbus-waq2832z.yaml:bsh_wm_remain: internal entity -- not exported
+  - bsh-dbus-waq2832z.yaml:bsh_wm_feat_speedplus: lambda not converted -- int prog = id(current_program); if (prog == 7 || prog == 8 || prog == 
+  - bsh-dbus-waq2832z.yaml:bsh_wm_feat_rinsehold: lambda not converted -- id(rinsehold) = (x[0] == 0x01); return x[0] == 0x01;
+  - bsh-dbus-waq2832z.yaml:bsh_wm_program_started: lambda not converted -- id(bsh_wm_program_schedule_state) = 1; id(bsh_wm_program_schedule).upd
+  - bsh-dbus-waq2832z.yaml:bsh_wm_program: lambda not converted -- id(current_program) = x[2]; return std::to_string(x[2]);
+  - bsh-dbus-waq2832z.yaml:bsh_wm_washmodule: lambda not converted -- if (x[0] >= 3 && x[0] <= 6) id(bsh_wm_program_schedule_state) = 2; els
+  - bsh-dbus-waq2832z.yaml:bsh_wm_state: lambda not converted -- id(bsh_wm_state_raw) = x[0]; return std::to_string(x[0]);
+- **bsh-dbus-was28443.yaml** -> `was28443.json` -- 18/19 entities (95%), 13 groups, washing_machine
+  - bsh-dbus-was28443.yaml:bsh_wm_rpm: filter lambda not converted -- needs review
+  - bsh-dbus-was28443.yaml:bsh_wm_feat_speedplus: lambda not converted -- int sensor_value = x[0]; int mask = 0b01100000; // Mask for bits in po
+- **bsh-dbus-wav28g43.yaml** -> `wav28g43.json` -- 11/14 entities (79%), 11 groups, washing_machine
+  - bsh-dbus-wav28g43.yaml:bsh_wm_rpm_current: lambda not converted -- if (x[1] != 0x0a) return {}; return x[2] << 8 | x[3];
+  - bsh-dbus-wav28g43.yaml:bsh_wm_ready: lambda not converted -- if (x[0] == 5 || x[0] == 46) { id(bsh_wm_remain).publish_state(0); id(
+  - bsh-dbus-wav28g43.yaml:bsh_wm_door: lambda not converted -- if (x.size() < 2) return ""; if (x[0] != 0x29) return ""; return std::
+  - bsh-dbus-wav28g43.yaml:bsh_wm_state: filter lambda not converted -- needs review
+- **bsh-dbus-waw325e27.yaml** -> `waw325e27.json` -- 14/17 entities (82%), 12 groups, washing_machine
+  - bsh-dbus-waw325e27.yaml:bsh_wm_ready: lambda not converted -- if (x[0] == 5 || x[0] == 46) { id(bsh_wm_remain).publish_state(0); id(
+  - bsh-dbus-waw325e27.yaml:bsh_flecken_program: lambda not converted -- if ((x[5] & 0x2) && ((x[6] & 0x30) == 0x00)) return "Speisefett/Öl"; e
+  - bsh-dbus-waw325e27.yaml:bsh_wm_door: lambda not converted -- if (x.size() < 2) return ""; if (x[0] != 0x29) return ""; return std::
+  - bsh-dbus-waw325e27.yaml:bsh_wm_state: filter lambda not converted -- needs review
+- **bsh-dbus-wm14e3a0.yaml** -> `wm14e3a0.json` -- 7/9 entities (78%), 3 groups, washing_machine
+  - bsh-dbus-wm14e3a0.yaml:bsh_wm_remain: lambda not converted -- unsigned int r = 0; for (unsigned int i = 3; i <= 5; i++) { const unsi
+  - bsh-dbus-wm14e3a0.yaml:bsh_wm_program_status: lambda not converted -- if (x[2] & 0x8) { return { "Schleudern" }; } if (x[2] & 0x4) { return 
+- **bsh-dbus-wm14q441.yaml** -> `wm14q441.json` -- 17/18 entities (94%), 12 groups, washing_machine
+  - bsh-dbus-wm14q441.yaml:bsh_wm_temperature: filter lambda not converted -- needs review
+  - bsh-dbus-wm14q441.yaml:bsh_wm_kein_schleudern: lambda not converted -- bool keinschleudern = (x[0] & 0x01); if(keinschleudern == true) { id(b
+- **bsh-dbus-wt47r440.yaml** -> `wt47r440.json` -- 9/9 entities (100%), 9 groups, dryer
+- **bsh-dbus-wt47w5w0.yaml** -> `wt47w5w0.json` -- 10/10 entities (100%), 10 groups, dryer
+- **bsh-dbus-wtw83272nl.yaml** -> `wtw83272nl.json` -- 1/5 entities (20%), 5 groups, dryer
+  - bsh-dbus-wtw83272nl.yaml:resterende_minuten_id: lambda not converted -- if (id(current_display_text).find("End") != std::string::npos) return 
+  - bsh-dbus-wtw83272nl.yaml:machine_status: lambda not converted -- if (x.size() < 6) return {}; if (x[1] & 0x01) return std::string("Bezi
+  - bsh-dbus-wtw83272nl.yaml:display_raw: lambda not converted -- std::string txt = ""; for (auto v : x) if (v >= 0x20 && v <= 0x7E) txt
+- **bsh-dbus-wtw85460de.yaml** -> `wtw85460de.json` -- 7/11 entities (64%), 10 groups, dryer
+  - bsh-dbus-wtw85460de.yaml:bsh_dryer_time_remaining: lambda not converted -- float new_time_remaining = (x[0] << 8 | x[1]) / 60; if (id(dryer_proce
+  - bsh-dbus-wtw85460de.yaml:bsh_dryer_status: lambda not converted -- if (x[0] == 22) { id(dryer_running_last_state) = true; id(dryer_status
+  - bsh-dbus-wtw85460de.yaml:bsh_dryer_ready: lambda not converted -- if (x[0] == 1 || x[0] == 35) { id(dryer_running_last_state) = true; id
+  - bsh-dbus-wtw85460de.yaml:bsh_dryer_process_status: lambda not converted -- if (x[0] == 5 || x[0] == 22) { id(dryer_running_last_state) = true; id
+- **bsh-dbus-wu14ut40.yaml** -> `wu14ut40.json` -- 13/15 entities (87%), 12 groups, washing_machine
+  - bsh-dbus-wu14ut40.yaml:bsh_wm_door: lambda not converted -- if (x.size() < 2) return ""; if (x[0] != 0x29) return ""; return std::
+  - bsh-dbus-wu14ut40.yaml:bsh_wm_state: filter lambda not converted -- needs review
+  - bsh-dbus-wu14ut40.yaml:bsh_wm_ready: lambda not converted -- if (x[0] == 5 || x[0] == 46) { id(bsh_wm_remain).publish_state(0); } r

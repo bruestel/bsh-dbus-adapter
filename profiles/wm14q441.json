@@ -1,0 +1,272 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wm14q441",
+    "model": "WM14Q441",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-wm14q441.yaml",
+    "credits": [
+      "fkzle",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Siemens",
+    "product": "Siemens iQ500"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "temperature",
+      "from": "temperature",
+      "name": "Temperature",
+      "kind": "sensor",
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "rpm",
+      "from": "rpm",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "multiply",
+          "value": 10.0
+        }
+      ]
+    },
+    {
+      "id": "unbalance_x",
+      "from": "unbalance_x",
+      "name": "Unbalance X",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-x-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "unbalance_z",
+      "from": "unbalance_z",
+      "name": "Unbalance Z",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-z-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "unbalance_y",
+      "from": "unbalance_y",
+      "name": "Unbalance Y",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-y-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "remain",
+      "from": "remain_2",
+      "name": "Time remaining",
+      "kind": "sensor"
+    },
+    {
+      "id": "feat_waterplus",
+      "from": "feat_waterplus_3",
+      "name": "Extra rinse",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "speedperfect",
+      "name": "SpeedPerfect",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "bit",
+        "at": 0,
+        "bit": 6,
+        "invert": true
+      },
+      "ha": {
+        "icon": "mdi:clock-fast"
+      }
+    },
+    {
+      "id": "feat_stains",
+      "from": "feat_stains",
+      "name": "EcoPerfect",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:liquid-spot"
+      }
+    },
+    {
+      "id": "feat_prewash",
+      "from": "feat_prewash_2",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:rotate-orbit"
+      }
+    },
+    {
+      "id": "feat_anticrease",
+      "from": "feat_anticrease",
+      "name": "Anti-crease",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:iron"
+      }
+    },
+    {
+      "id": "start_button",
+      "from": "start_button",
+      "name": "Start button",
+      "kind": "binary_sensor",
+      "behavior": {
+        "momentary_ms": 1000
+      },
+      "ha": {
+        "icon": "mdi:button-pointer"
+      }
+    },
+    {
+      "id": "program_started",
+      "from": "program_started",
+      "name": "Programme started",
+      "kind": "binary_sensor",
+      "behavior": {
+        "momentary_ms": 1000
+      },
+      "ha": {
+        "icon": "mdi:ray-start-arrow",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program_2",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Baumwolle",
+            "2": "Baumwolle + v",
+            "3": "Pflegeleicht",
+            "4": "Pflegeleicht + v",
+            "5": "Schnell/Mix",
+            "6": "Fein/Seide",
+            "7": "Wolle",
+            "8": "Rinsing or spinning",
+            "9": "Draining",
+            "10": "Gentle spin",
+            "11": "Super 15",
+            "12": "Pflegeleicht Plus",
+            "13": "Super Fein",
+            "14": "Hemden/Business",
+            "15": "Outdoor"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:numeric"
+      }
+    },
+    {
+      "id": "washmodule",
+      "from": "washmodule",
+      "name": "Wash module",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "3": "Detergent intake (3)",
+            "4": "Water intake (4)",
+            "5": "Heating (5)",
+            "6": "Tumbling (6)",
+            "9": "Abpumpen / Schleudern (9)",
+            "13": "Rinsing (13)",
+            "15": "Abpumpen / Schleudern (15)",
+            "16": "Rinsing (16)",
+            "20": "Abpumpen / Schleudern  (20)",
+            "23": "Rinsing (23)",
+            "26": "Final spin (26)",
+            "28": "Tumbling (28)"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:map-marker-path",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Closed, not locked",
+            "1": "Closed and locked",
+            "2": "Open"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "state",
+      "from": "state",
+      "name": "Status",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Stopped or ready",
+            "1": "Finished",
+            "2": "Running"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:state-machine"
+      }
+    }
+  ],
+  "extends": "base/washing-machine"
+}

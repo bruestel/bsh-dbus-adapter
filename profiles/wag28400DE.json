@@ -1,0 +1,438 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wag28400DE",
+    "model": "WAG28400DE",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-wag28400DE.yaml",
+    "credits": [
+      "Kim Marcel Zeuner",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch Series 6"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "machine_spin_speed",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "u8",
+        "at": 4
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": 0
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "unit_of_measurement": "U/min",
+        "state_class": "measurement",
+        "icon": "mdi:rotate-right",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "machine_unbalance_x",
+      "name": "Unbalance X",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x4011",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 1
+      },
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-x-rotate-clockwise",
+        "entity_category": "diagnostic",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "machine_unbalance_z",
+      "name": "Unbalance Z",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x4011",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 3
+      },
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-z-rotate-clockwise",
+        "entity_category": "diagnostic",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "machine_unbalance_y",
+      "name": "Unbalance Y",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x4011",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 5
+      },
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-y-rotate-clockwise",
+        "entity_category": "diagnostic",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "machine_time_remaining",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ],
+      "ha": {
+        "icon": "mdi:clock-outline"
+      }
+    },
+    {
+      "id": "machine_time_remaining_from_process",
+      "name": "Time remaining, computed",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1004",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u16be",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ],
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "icon": "mdi:clock-outline",
+        "entity_category": "diagnostic",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "machine_power_on",
+      "name": "Powered on",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "eq",
+        "at": 0,
+        "value": 37,
+        "invert": true
+      },
+      "ha": {
+        "device_class": "power"
+      }
+    },
+    {
+      "id": "machine_speed_perfect",
+      "from": "feat_speedperfect",
+      "name": "SpeedPerfect",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:fast-forward"
+      }
+    },
+    {
+      "id": "machine_pre_wash",
+      "from": "feat_prewash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:feather"
+      }
+    },
+    {
+      "id": "machine_rinse_plus",
+      "name": "Extra rinse",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "bits",
+        "at": 5,
+        "shift": 0,
+        "mask": 18
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                18
+              ],
+              "out": true
+            }
+          ],
+          "default": false
+        }
+      ],
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "machine_door",
+      "name": "Door",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                3,
+                57
+              ],
+              "out": true
+            },
+            {
+              "in": [
+                6,
+                7,
+                22
+              ],
+              "out": false
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "device_class": "door"
+      }
+    },
+    {
+      "id": "machine_ready",
+      "name": "Ready to start",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "1": "Running",
+            "2": "Paused, unlocking",
+            "3": "Ready to start",
+            "5": "Active or ready",
+            "6": "Door open, cannot start",
+            "35": "Started",
+            "36": "Delayed start",
+            "37": "Off",
+            "46": "Standby",
+            "47": "Ready"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:washing-machine"
+      }
+    },
+    {
+      "id": "machine_program",
+      "from": "program",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Baumwolle",
+            "2": "Bunt",
+            "3": "ECO 40-60",
+            "4": "Pflegeleicht",
+            "5": "Handwäsche/Wolle",
+            "6": "Extra Kurz 15/30",
+            "7": "Rinsing",
+            "8": "Spinning or draining",
+            "9": "Schnell/Mix",
+            "10": "Schnell/Mix leise",
+            "11": "Fein/Seide",
+            "12": "Sportswear",
+            "13": "Jeans/Dunkle Wäsche",
+            "14": "Hemden/Blusen",
+            "15": "AllergiePlus"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tshirt-crew-outline"
+      }
+    },
+    {
+      "id": "machine_module",
+      "name": "Wash module",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x13",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Idle or transition",
+            "1": "Initialising",
+            "2": "Preparing",
+            "3": "Washing",
+            "4": "Rinsing",
+            "5": "Draining",
+            "6": "Active or changing",
+            "7": "Spinning",
+            "8": "Paused",
+            "16": "Special phase"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:map-marker-path"
+      }
+    },
+    {
+      "id": "machine_rotation_direction",
+      "from": "machine_rotation_direction",
+      "name": "Drum direction",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "108": "Turning right",
+            "114": "Turning left"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:crop-rotate",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "machine_program_phase",
+      "from": "program_phase",
+      "name": "Programme phase",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "No programme started",
+            "3": "Detergent intake",
+            "4": "Load detection",
+            "5": "Washing",
+            "6": "Washing",
+            "7": "Cooling down",
+            "9": "Rinse spin",
+            "11": "Rinsing",
+            "12": "Rinse spin",
+            "13": "Rinsing",
+            "20": "Rinse spin",
+            "24": "Transition",
+            "26": "Final spin",
+            "28": "Tumbling",
+            "49": "Softener",
+            "53": "Load detection"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:middleware"
+      }
+    },
+    {
+      "id": "machine_program_phase_raw",
+      "from": "program_phase",
+      "name": "Programme phase, raw",
+      "kind": "text_sensor",
+      "ha": {
+        "icon": "mdi:middleware",
+        "entity_category": "diagnostic"
+      }
+    }
+  ],
+  "extends": "base/washing-machine"
+}

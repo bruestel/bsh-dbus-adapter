@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "dryer",
+    "model": "Generic dryer",
+    "appliance": "dryer",
+    "generic": true,
+    "note": "Shared decoding, factored from the model profiles. Usable on its own for an appliance of this family whose exact model has not been mapped: the values are correct, but codes are reported raw because programme names differ per model."
+  },
+  "entities": [
+    {
+      "id": "program",
+      "from": "program",
+      "name": "Programme",
+      "kind": "text_sensor"
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door"
+    },
+    {
+      "id": "status",
+      "from": "state",
+      "name": "Status"
+    },
+    {
+      "id": "time_remaining",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "ready",
+      "from": "ready",
+      "name": "Ready to start",
+      "kind": "text_sensor"
+    },
+    {
+      "id": "anti_crease_time",
+      "name": "Anti-crease time",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "i8",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "low_heat",
+      "name": "Low heat",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 4
+      }
+    },
+    {
+      "id": "fine_adjust",
+      "name": "Dryness level",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "u8",
+        "at": 4
+      }
+    },
+    {
+      "id": "finished",
+      "name": "Finished",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1004",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    }
+  ],
+  "extends": "base/family-a"
+}

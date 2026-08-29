@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bsh-dbus-adapter — Web Installer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='11' fill='none' stroke='%232563eb' stroke-width='3'/><circle cx='16' cy='16' r='3' fill='%232563eb'/></svg>">
+<!-- Pinned exactly, not to a major range. This is the one script that writes to
+     the hardware, and it comes from a third-party CDN: a range would let it
+     change under a page nobody is watching. Bump it deliberately. -->
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+:root{color-scheme:light dark;--primary:#2563eb}
+body{font-family:system-ui,-apple-system,sans-serif;max-width:40rem;margin:0 auto;padding:2.5rem 1rem 4rem;line-height:1.6}
+h1{font-size:1.6rem;margin:0 0 .25rem}
+p.sub{margin:0 0 2rem;opacity:.75}
+h2{font-size:1.05rem;margin:2.25rem 0 .5rem;padding-bottom:.3rem;border-bottom:1px solid #8884}
+.targets{display:grid;gap:1rem;grid-template-columns:1fr}
+@media(min-width:34rem){.targets{grid-template-columns:1fr 1fr}}
+.card{border:1px solid #8886;border-radius:.6rem;padding:1rem 1.1rem 1.2rem}
+.card h3{margin:0 0 .2rem;font-size:1rem}
+.card p{margin:0 0 .9rem;font-size:.88rem;opacity:.75}
+esp-web-install-button{--esp-tools-button-color:#fff;--esp-tools-button-text-color:#fff}
+.unsupported,.not-allowed{display:block;font-size:.85rem;opacity:.8}
+ol{padding-left:1.2rem}
+li{margin:.3rem 0}
+code{background:#8881;padding:.1rem .35rem;border-radius:.25rem;font-size:.9em}
+.note{border-left:3px solid var(--primary);padding:.5rem .9rem;margin:1.25rem 0;background:#2563eb0f;font-size:.92rem}
+.danger{border-left-color:#dc2626;background:#dc26260f}
+footer{margin-top:3rem;font-size:.85rem;opacity:.65}
+a{color:var(--primary)}
+</style>
+</head>
+<body>
+
+<h1>bsh-dbus-adapter</h1>
+<p class="sub">Flash the firmware for the B/S/H/ D-Bus adapter straight from this page. Version {{VERSION}}.</p>
+
+<div class="note danger">
+  <strong>Flash the board on its own, never while it is attached to an appliance.</strong>
+  The D-Bus is not guaranteed to be isolated from mains earth, and this page needs
+  a USB cable to your computer. Set the board up here first, then take it to the
+  machine, where it is reachable over WiFi and needs no cable again.
+</div>
+
+<div class="note">
+  Works in <strong>Chrome</strong> and <strong>Edge</strong> on a desktop, which are the browsers that support Web Serial. Firefox and Safari cannot talk to a serial port, and neither can phones.
+</div>
+
+<h2>Pick your board</h2>
+<div class="targets">
+  <div class="card">
+    <h3>Bouni BSH-Board</h3>
+    <p>ESP32-C6. The board this firmware was developed on and runs on.</p>
+    <esp-web-install-button manifest="manifest-bouni-c6.json">
+      <button slot="activate">Install on the Bouni board</button>
+      <span slot="unsupported" class="unsupported">Your browser cannot flash — use Chrome or Edge on a desktop.</span>
+      <span slot="not-allowed" class="not-allowed">This page has to be served over HTTPS.</span>
+    </esp-web-install-button>
+  </div>
+
+  <div class="card">
+    <h3>kiu BaSHi</h3>
+    <p>With an ESP32-C3 Super Mini. <strong>Caution: not tested on hardware yet.</strong> The pins come from the board's own published definitions, which is a good source but not a test. Check the values against the appliance before trusting them.</p>
+    <esp-web-install-button manifest="manifest-kiu-c3.json">
+      <button slot="activate">Install on the BaSHi</button>
+      <span slot="unsupported" class="unsupported">Your browser cannot flash — use Chrome or Edge on a desktop.</span>
+      <span slot="not-allowed" class="not-allowed">This page has to be served over HTTPS.</span>
+    </esp-web-install-button>
+  </div>
+</div>
+
+<div class="note">
+  <strong>Updating a device that is already set up?</strong> You do not need this page:
+  the firmware updates itself over the network, under Settings → Firmware. Use the
+  installer for the first flash, or to recover a board that no longer answers.
+  It writes the four parts at their own offsets and leaves the space between them
+  alone, so WiFi credentials, the password and stored profiles survive. It also
+  offers to erase the device; say no unless you want to start over.
+</div>
+
+<h2>After flashing</h2>
+<ol>
+  <li>The adapter opens its own network, named after itself: <code>bsh-dbus-adapter-XXXXXX</code>. It is open, with no password.</li>
+  <li>The setup page appears by itself on most phones. If it does not, browse to <code>http://192.168.4.1/</code>.</li>
+  <li>Enter your WiFi credentials. The device restarts to join, so the setup network disappears — rejoin your own WiFi and look for the device there, by name in your router or over mDNS.</li>
+  <li>Connect it to the appliance. It will listen, work out which profile matches what it hears, and offer that.</li>
+</ol>
+<p>Nothing is compiled in for your machine: the same image works for everybody, and
+what the bytes mean comes from a profile you can pick, edit or write on the device.</p>
+
+<h2>If you cannot reach it again</h2>
+<p>Holding the <strong>BOOT</strong> button for five seconds while the device is running
+erases the WiFi credentials and the password and reopens the setup network. On the
+BaSHi that button is switched off on purpose, because there the pin doubles as the
+bus line and holding it would disturb the appliance.</p>
+
+<footer>
+  <p><a href="https://github.com/bruestel/bsh-dbus-adapter">Source, documentation and releases on GitHub</a> · GPL-3.0</p>
+  <p>Flashing in the browser is done by <a href="https://github.com/esphome/esp-web-tools">ESP Web Tools</a>,
+  by Nabu Casa and the ESPHome project — thank you for making the hardest step of a
+  hardware project a button.</p>
+</footer>
+
+</body>
+</html>

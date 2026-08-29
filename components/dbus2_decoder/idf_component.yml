@@ -1,0 +1,3 @@
+## ProfileParser needs cJSON; ESP-IDF 6 no longer bundles it.
+dependencies:
+  espressif/cjson: "^1.7.18"

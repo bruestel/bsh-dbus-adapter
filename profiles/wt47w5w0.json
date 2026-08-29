@@ -1,0 +1,211 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wt47w5w0",
+    "model": "WT47W5W0",
+    "appliance": "dryer",
+    "source": "bsh-dbus-wt47w5w0.yaml",
+    "credits": [
+      "Tristan Bastian",
+      "Stefan Hirt",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Siemens",
+    "product": "Siemens iQ700"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "time_remaining",
+      "from": "time_remaining",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ],
+      "ha": {
+        "icon": "mdi:clock-outline"
+      }
+    },
+    {
+      "id": "anti_crease_time",
+      "from": "anti_crease_time",
+      "name": "Anti-crease",
+      "kind": "sensor",
+      "ha": {
+        "icon": "mdi:shield-refresh"
+      }
+    },
+    {
+      "id": "low_heat",
+      "from": "low_heat",
+      "name": "Low heat",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:feather"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program",
+      "name": "Drying programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Baumwolle",
+            "2": "Pflegeleicht",
+            "3": "Mix",
+            "4": "Outdoor",
+            "5": "Wolle finish",
+            "6": "zeitlich kalt",
+            "7": "zeitlich warm",
+            "8": "Hygiene",
+            "9": "Super 40",
+            "10": "Handtücher",
+            "11": "Outdoor",
+            "12": "Kopfkissen",
+            "13": "Steppdecken",
+            "14": "Hemden",
+            "15": "Pflegeleicht extratrocken",
+            "16": "Dessous"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tshirt-crew-outline"
+      }
+    },
+    {
+      "id": "fine_adjust",
+      "from": "fine_adjust",
+      "name": "Dryness level",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "6": "Off",
+            "8": "I",
+            "10": "II",
+            "12": "III"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:white-balance-sunny"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Unknown",
+            "3": "Open",
+            "6": "Closed"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "status",
+      "from": "status",
+      "name": "Status",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "12": "Ready or paused",
+            "20": "Off",
+            "22": "Running"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    },
+    {
+      "id": "ready",
+      "from": "ready",
+      "name": "Ready to start",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "1": "Running",
+            "3": "Ready to start",
+            "35": "Started",
+            "36": "Delayed start"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    },
+    {
+      "id": "finished",
+      "from": "finished",
+      "name": "Finished",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "12": "Ready or paused",
+            "22": "Running"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    },
+    {
+      "id": "drying_goal",
+      "name": "Drying target",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Bügeln",
+            "2": "Schrank",
+            "3": "Schrank+"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:target"
+      }
+    }
+  ],
+  "extends": "base/dryer"
+}

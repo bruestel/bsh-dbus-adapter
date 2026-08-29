@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "family-a",
+    "model": "Generic family a appliance",
+    "appliance": "generic",
+    "generic": true,
+    "note": "Decoding shared across appliance types of one address family. Only definitions verified to carry the same meaning are here -- 0x11.1006 bytes 2 and 4 look the same but mean different things per appliance type, and are deliberately left to the type bases."
+  },
+  "entities": [
+    {
+      "id": "ready",
+      "name": "Ready to start",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "program",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "state",
+      "name": "Status",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1000",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      }
+    },
+    {
+      "id": "door",
+      "name": "Door",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      }
+    },
+    {
+      "id": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1002",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u16be",
+        "at": 0
+      }
+    }
+  ]
+}

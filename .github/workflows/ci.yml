@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The firmware is strictly read-only: it must never drive the D-Bus-2. The TX
+  # pin is handed to the UART driver on purpose (so it rests at idle and keeps
+  # the open-drain level shifter released), but nothing may ever write to it.
+  # This guard makes that a build-breaking property rather than a good intention.
+  read-only-guard:
+    name: No bus write path
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Reject UART write calls
+        run: |
+          if grep -rnE 'uart_write_bytes|uart_tx_chars|uart_wait_tx_done' \
+               src components 2>/dev/null; then
+            echo "::error::Found a UART write call. This firmware must never transmit."
+            exit 1
+          fi
+          echo "OK: no UART write calls."
+
+  # The factoring must stay lossless: resolving base + delta has to reproduce
+  # exactly what the converter produced. Without this the inheritance could
+  # quietly drop a definition, which is the failure mode this converter has
+  # already produced five times.
+  profiles:
+    name: Profiles resolve losslessly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml
+      - name: Verify inheritance round-trips
+        run: python3 tools/factor_profiles.py --check profiles/
+      - name: Resolve for the device parser
+        run: python3 tools/resolve_profiles.py profiles/ /tmp/resolved
+
+  # The API reference on the interface is prose, and prose does not follow code.
+  # An endpoint added, renamed or withdrawn would leave the page describing a
+  # device that no longer exists, which is worse than documenting nothing at all.
+  api-docs:
+    name: API reference matches the routes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Compare the documented endpoints with the served ones
+        run: python3 tools/check_api_docs.py
+
+  firmware:
+    name: Build ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [bouni-c6, kiu-c3]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # ESP-IDF derives the app version via `git describe`; a shallow
+          # clone without history makes the build fail.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ matrix.env }}-${{ hashFiles('platformio.ini', 'sdkconfig.defaults') }}
+          restore-keys: pio-${{ matrix.env }}-
+
+      - run: pip install --upgrade platformio
+      - run: pio run -e ${{ matrix.env }}
+
+  # Pure protocol logic, built for the host with sanitizers. Needs no ESP-IDF
+  # and no network, so it is the fast feedback loop.
+  host-tests:
+    name: Host unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        run: cmake -S test/host -B test/host/build -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build test/host/build -j
+      - name: Test
+        run: ctest --test-dir test/host/build --output-on-failure

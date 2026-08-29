@@ -1,0 +1,537 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "waq24468-09es",
+    "model": "WAQ24468-09ES",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-waq24468-09es.yaml",
+    "credits": [
+      "Akdri",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch Avantixx"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "temperature",
+      "from": "temperature",
+      "name": "Temperature",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "calibrate_linear",
+          "datapoints": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              20.0
+            ],
+            [
+              2.0,
+              30.0
+            ],
+            [
+              3.0,
+              40.0
+            ],
+            [
+              4.0,
+              60.0
+            ],
+            [
+              5.0,
+              70.0
+            ],
+            [
+              6.0,
+              80.0
+            ],
+            [
+              7.0,
+              90.0
+            ]
+          ]
+        }
+      ],
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "unbalance_x",
+      "from": "unbalance_x",
+      "name": "Unbalance X",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 3000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "unit_of_measurement": "m/s²",
+        "state_class": "measurement",
+        "icon": "mdi:axis-x-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "unbalance_z",
+      "from": "unbalance_z",
+      "name": "Unbalance Z",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 3000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "unit_of_measurement": "m/s²",
+        "state_class": "measurement",
+        "icon": "mdi:axis-z-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "unbalance_y",
+      "from": "unbalance_y",
+      "name": "Unbalance Y",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 3000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "unit_of_measurement": "m/s²",
+        "state_class": "measurement",
+        "icon": "mdi:axis-y-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "washmodule",
+      "from": "washmodule",
+      "name": "Programme",
+      "kind": "sensor",
+      "ha": {
+        "unit_of_measurement": "ciclo",
+        "icon": "mdi:map-marker-path",
+        "entity_category": "diagnostic",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_8",
+      "name": "3015-1-08",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 7
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-8-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_7",
+      "name": "3015-1-07",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 6
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-7-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_6",
+      "name": "3015-1-06",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 5
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-6-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_5",
+      "name": "3015-1-05",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 4
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-5-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_4",
+      "name": "3015-1-04",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 3
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-4-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_3",
+      "name": "3015-1-03",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 2
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-3-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_2",
+      "name": "3015-1-02",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 1
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-2-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "3015_1_1",
+      "name": "3015-1-01",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "mask",
+        "at": 1,
+        "mask": 1
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-1-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "turn_left",
+      "name": "Turning left",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "bit",
+        "at": 2,
+        "bit": 4
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:rotate-left",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "turn_right",
+      "name": "Turning right",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "bit",
+        "at": 2,
+        "bit": 3
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:rotate-right",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "rpm_ontime",
+      "from": "rpm_ontime",
+      "name": "Spin speed, actual",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 16
+        }
+      ]
+    },
+    {
+      "id": "rpm_objetivo",
+      "name": "Spin speed, target",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x16",
+        "cmd": "0x3015",
+        "min_len": 8
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 6
+      },
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 16
+        }
+      ],
+      "ha": {
+        "device_class": "speed",
+        "unit_of_measurement": "rpm",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "remain",
+      "from": "remain_2",
+      "name": "Time remaining",
+      "kind": "sensor"
+    },
+    {
+      "id": "1200_3_1",
+      "name": "1200-3-01",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x26",
+        "cmd": "0x1200",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "mask",
+        "at": 3,
+        "mask": 1
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-1-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "1200_2_3",
+      "name": "1200-2-03",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x26",
+        "cmd": "0x1200",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "bit",
+        "at": 2,
+        "bit": 2
+      },
+      "ha": {
+        "unit_of_measurement": "u",
+        "icon": "mdi:numeric-3-box-outline",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "feat_waterplus",
+      "from": "feat_waterplus_2",
+      "name": "Extra",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "feat_eco",
+      "from": "feat_stains",
+      "name": "EcoPerfect",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:sprout-outline"
+      }
+    },
+    {
+      "id": "feat_anticrease",
+      "from": "feat_anticrease",
+      "name": "Easy iron",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:iron"
+      }
+    },
+    {
+      "id": "start_button",
+      "from": "start_button",
+      "name": "Start button",
+      "kind": "binary_sensor",
+      "behavior": {
+        "momentary_ms": 1000
+      },
+      "ha": {
+        "icon": "mdi:button-pointer"
+      }
+    },
+    {
+      "id": "program_started",
+      "from": "program_started",
+      "name": "Washing",
+      "kind": "binary_sensor",
+      "behavior": {
+        "momentary_ms": 1000
+      },
+      "ha": {
+        "icon": "mdi:ray-start-arrow",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program_2",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Algodón",
+            "2": "Algodón +",
+            "3": "Sintéticos",
+            "4": "Sintéticos +",
+            "5": "Mix",
+            "6": "Delicado",
+            "7": "Lana",
+            "8": "Spinning",
+            "9": "Draining",
+            "10": "Rapido 15",
+            "11": "Ropa Oscura",
+            "12": "Camisas/Blusas",
+            "13": "Plumas",
+            "14": "Sport",
+            "15": "Antialergias"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:numeric"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Closed",
+            "1": "Locked",
+            "2": "Open"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "state",
+      "from": "state",
+      "name": "Status",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Finished",
+            "1": "Finishing",
+            "2": "Washing"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:state-machine"
+      }
+    }
+  ],
+  "extends": "base/washing-machine"
+}

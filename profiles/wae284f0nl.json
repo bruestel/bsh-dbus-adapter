@@ -1,0 +1,187 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wae284f0nl",
+    "model": "WAE284F0NL",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-wae284f0nl.yaml",
+    "credits": [
+      "Thijn",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "start_led",
+      "from": "start_led",
+      "name": "Start light",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": 1
+            },
+            {
+              "in": [
+                0
+              ],
+              "out": 0
+            }
+          ],
+          "default": 0
+        }
+      ],
+      "behavior": {
+        "debounce_ms": 2000,
+        "expire_after_s": 1
+      }
+    },
+    {
+      "id": "temperature",
+      "from": "temperature_3",
+      "name": "Temperature",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                32
+              ],
+              "out": 0
+            },
+            {
+              "in": [
+                16
+              ],
+              "out": 30
+            },
+            {
+              "in": [
+                8
+              ],
+              "out": 40
+            },
+            {
+              "in": [
+                4
+              ],
+              "out": 50
+            },
+            {
+              "in": [
+                2
+              ],
+              "out": 60
+            },
+            {
+              "in": [
+                1
+              ],
+              "out": 90
+            }
+          ],
+          "default": "drop"
+        }
+      ]
+    },
+    {
+      "id": "rpm",
+      "from": "rpm_3",
+      "name": "Vario speed",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                64
+              ],
+              "out": 0
+            },
+            {
+              "in": [
+                32
+              ],
+              "out": 400
+            },
+            {
+              "in": [
+                16
+              ],
+              "out": 600
+            },
+            {
+              "in": [
+                8
+              ],
+              "out": 800
+            },
+            {
+              "in": [
+                6
+              ],
+              "out": 1200
+            },
+            {
+              "in": [
+                1
+              ],
+              "out": 1400
+            }
+          ],
+          "default": "drop"
+        }
+      ]
+    },
+    {
+      "id": "feat_stains",
+      "from": "feat_stains_2",
+      "name": "Stain removal",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:leaf"
+      }
+    },
+    {
+      "id": "feat_pre_wash",
+      "from": "feat_pre_wash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:rotate-orbit"
+      }
+    },
+    {
+      "id": "feat_anti_crease",
+      "from": "feat_anti_crease",
+      "name": "Easy iron",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:iron"
+      }
+    },
+    {
+      "id": "feat_waterplus",
+      "from": "feat_waterplus",
+      "name": "Water plus",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    }
+  ],
+  "extends": "base/washing-machine"
+}

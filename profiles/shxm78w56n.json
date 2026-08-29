@@ -1,0 +1,175 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "shxm78w56n",
+    "model": "SHXM78W56N",
+    "appliance": "dishwasher",
+    "source": "bsh-dbus-shxm78w56n.yaml",
+    "credits": [
+      "Keith Baker",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch 800 Series"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "remain",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor"
+    },
+    {
+      "id": "rinse_aid",
+      "from": "rinse_aid",
+      "name": "Rinse aid",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:lotion-plus-outline"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "binary_sensor"
+    },
+    {
+      "id": "half_load",
+      "name": "Half load",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 4
+      },
+      "ha": {
+        "icon": "mdi:fraction-one-half"
+      }
+    },
+    {
+      "id": "delicate",
+      "name": "Delicate",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 5
+      },
+      "ha": {
+        "icon": "mdi:glass-cocktail"
+      }
+    },
+    {
+      "id": "sanitize",
+      "name": "Sanitize",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 2
+      },
+      "ha": {
+        "icon": "mdi:heating-coil"
+      }
+    },
+    {
+      "id": "extra_dry",
+      "name": "Extra dry",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "bit",
+        "at": 1,
+        "bit": 1
+      },
+      "ha": {
+        "icon": "mdi:weather-sunny"
+      }
+    },
+    {
+      "id": "mode",
+      "name": "Mode",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x1011",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                10
+              ],
+              "out": "Heavy"
+            },
+            {
+              "in": [
+                13
+              ],
+              "out": "Auto"
+            },
+            {
+              "in": [
+                15
+              ],
+              "out": "Eco"
+            },
+            {
+              "in": [
+                14
+              ],
+              "out": "Normal"
+            },
+            {
+              "in": [
+                21
+              ],
+              "out": "Speed 60"
+            },
+            {
+              "in": [
+                18
+              ],
+              "out": "Rinse"
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:knob"
+      }
+    }
+  ],
+  "extends": "base/dishwasher"
+}

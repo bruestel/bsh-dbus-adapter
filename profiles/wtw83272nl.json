@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wtw83272nl",
+    "model": "WTW83272NL",
+    "appliance": "dryer",
+    "source": "bsh-dbus-wtw83272nl.yaml",
+    "credits": [
+      "wimb0",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch Series 4"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "door_binary",
+      "name": "Door",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x22",
+        "cmd": "0x1053",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "u8",
+        "at": 5
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                0
+              ],
+              "out": true
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "device_class": "door"
+      }
+    }
+  ],
+  "extends": "base/dryer"
+}

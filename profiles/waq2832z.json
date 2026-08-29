@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "waq2832z",
+    "model": "WAQ2832Z",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-waq2832z.yaml",
+    "credits": [
+      "domhit",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch Avantixx 7"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "feat_waterplus",
+      "name": "Extra rinse",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "mask",
+        "at": 0,
+        "mask": 16
+      },
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "feat_prewash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "mask",
+        "at": 0,
+        "mask": 128
+      },
+      "ha": {
+        "icon": "mdi:rotate-orbit"
+      }
+    },
+    {
+      "id": "feat_anticrease",
+      "name": "Easy iron",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "eq",
+        "at": 1,
+        "value": 128
+      },
+      "ha": {
+        "icon": "mdi:iron"
+      }
+    },
+    {
+      "id": "feat_ecoperfect",
+      "name": "EcoPerfect",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x14",
+        "cmd": "0x1007",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "eq",
+        "at": 2,
+        "value": 2
+      },
+      "ha": {
+        "icon": "mdi:liquid-spot"
+      }
+    },
+    {
+      "id": "temperature",
+      "from": "temperature",
+      "name": "Temperature",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "cold",
+            "2": "30°C",
+            "3": "40°C",
+            "4": "60°C",
+            "7": "90°C"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:thermometer"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Closed, not locked",
+            "1": "Closed and locked",
+            "2": "Open"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "start_event",
+      "name": "Reload",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x15",
+        "cmd": "0x1100",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                0
+              ],
+              "out": "Reload"
+            },
+            {
+              "in": [
+                1
+              ],
+              "out": "Start"
+            },
+            {
+              "in": [
+                3
+              ],
+              "out": "Delayed start, ready"
+            },
+            {
+              "in": [
+                4
+              ],
+              "out": "Delayed start, reload"
+            },
+            {
+              "in": [
+                6
+              ],
+              "out": "Delayed start, starting"
+            }
+          ],
+          "default": "hold"
+        }
+      ]
+    }
+  ],
+  "extends": "base/washing-machine"
+}

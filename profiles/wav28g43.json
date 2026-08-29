@@ -1,0 +1,247 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wav28g43",
+    "model": "WAV28G43",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-wav28g43.yaml",
+    "credits": [
+      "MichaelHeimann",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch HomeProfessional"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "temperature",
+      "from": "temperature_2",
+      "name": "Temperature",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "calibrate_linear",
+          "datapoints": [
+            [
+              0.0,
+              10.0
+            ],
+            [
+              1.0,
+              20.0
+            ],
+            [
+              2.0,
+              30.0
+            ],
+            [
+              3.0,
+              40.0
+            ],
+            [
+              4.0,
+              50.0
+            ],
+            [
+              5.0,
+              60.0
+            ],
+            [
+              6.0,
+              70.0
+            ],
+            [
+              7.0,
+              80.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rpm",
+      "from": "rpm_2",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "multiply",
+          "value": 10.0
+        }
+      ]
+    },
+    {
+      "id": "remain",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ]
+    },
+    {
+      "id": "feat_waterplus",
+      "from": "feat_waterplus_4",
+      "name": "Extra rinse",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "feat_prewash",
+      "from": "feat_prewash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:rotate-orbit"
+      }
+    },
+    {
+      "id": "feat_speedperfect",
+      "from": "feat_speedperfect",
+      "name": "SpeedPerfect",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:clock-fast"
+      }
+    },
+    {
+      "id": "start_button",
+      "from": "start_button_2",
+      "name": "Start button",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:button-pointer"
+      }
+    },
+    {
+      "id": "program_started",
+      "from": "program_started_2",
+      "name": "Programme started",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:ray-start-arrow",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Eco 40-60",
+            "2": "Baumwolle",
+            "3": "Pflegeleicht",
+            "4": "Schnell/Mix",
+            "5": "Fein/Seide",
+            "6": "Wolle",
+            "7": "Extra Kurz 15'/30'",
+            "8": "Sportswear",
+            "9": "AllergiePlus",
+            "10": "Hemden/Blusen",
+            "11": "Schnell/Mix leise",
+            "12": "Pflegeleicht Plus",
+            "13": "Handtücher",
+            "14": "Steppdecken",
+            "15": "Trommelreinigen",
+            "16": "Rinsing",
+            "17": "Spinning",
+            "18": "Draining"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:numeric"
+      }
+    },
+    {
+      "id": "state",
+      "from": "state_2",
+      "name": "Status",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                41
+              ],
+              "out": ""
+            },
+            {
+              "in": [
+                67
+              ],
+              "out": ""
+            }
+          ],
+          "default": "hold"
+        },
+        {
+          "op": "map",
+          "values": {
+            "2": "Finished",
+            "12": "Ready or paused",
+            "20": "Power save",
+            "23": "Finished",
+            "33": "Running (33)",
+            "34": "Running (34)",
+            "35": "Running (35)",
+            "36": "Running (36)",
+            "37": "Running (37)",
+            "38": "Running (38)",
+            "39": "Running (39)"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:state-machine"
+      }
+    },
+    {
+      "id": "program_phase",
+      "from": "program_phase",
+      "name": "Programme phase",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "3": "Detergent intake",
+            "4": "Load detection",
+            "5": "Washing",
+            "6": "Washing",
+            "7": "Cooling down",
+            "9": "Rinse spin",
+            "11": "Rinsing",
+            "12": "Rinse spin",
+            "13": "Rinsing",
+            "20": "Rinse spin",
+            "24": "TBD",
+            "26": "Final spin",
+            "28": "Tumbling",
+            "49": "Softener",
+            "53": "Load detection"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:middleware"
+      }
+    }
+  ],
+  "extends": "base/washing-machine"
+}

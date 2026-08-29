@@ -1,0 +1,503 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wt47y781",
+    "model": "WT47Y781",
+    "appliance": "dryer",
+    "source": "derived from bsh-dbus-wt47w5w0.yaml; programme codes, status and door verified against a WT47Y781/09 on 2026-08-16",
+    "credits": [
+      "Tristan Bastian",
+      "Stefan Hirt",
+      "Hajo Noerenberg",
+      "Jonas Brüstel"
+    ],
+    "manufacturer": "Siemens",
+    "product": "Siemens iQ890"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "time_remaining",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1002",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u16be",
+        "at": 0
+      },
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0,
+        "icon": "mdi:clock-outline"
+      },
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ],
+      "behavior": {
+        "countdown": {
+          "every_s": 60,
+          "by": 1,
+          "min": 0,
+          "while": {
+            "entity": "ready",
+            "is": "Running"
+          }
+        }
+      }
+    },
+    {
+      "id": "anti_crease_time",
+      "name": "Anti-crease",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "i8",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0,
+        "icon": "mdi:shield-refresh"
+      },
+      "transforms": []
+    },
+    {
+      "id": "low_heat",
+      "name": "Gentle drying",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 4
+      },
+      "ha": {
+        "icon": "mdi:feather"
+      },
+      "transforms": []
+    },
+    {
+      "id": "program",
+      "name": "Drying programme",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "1": "Baumwolle",
+            "2": "Pflegeleicht",
+            "3": "Schnell/Mix",
+            "7": "Zeit kalt",
+            "8": "Zeit warm",
+            "10": "Decken",
+            "14": "Outdoor",
+            "6": "Jeans",
+            "13": "Hemden",
+            "11": "Super 40",
+            "12": "Kopfkissen",
+            "9": "Handtücher",
+            "5": "Wolle im Korb",
+            "4": "Schuhe im Korb"
+          },
+          "default": "Unknown (%d)"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tshirt-crew-outline"
+      }
+    },
+    {
+      "id": "fine_adjust",
+      "name": "Dryness level",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "u8",
+        "at": 4
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "6": "0",
+            "8": "+1",
+            "10": "+2",
+            "12": "+3"
+          },
+          "default": "Unknown (%d)"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:white-balance-sunny"
+      }
+    },
+    {
+      "id": "door",
+      "name": "Door",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                3
+              ],
+              "out": "Open"
+            },
+            {
+              "in": [
+                6
+              ],
+              "out": "Closed"
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1000",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                20
+              ],
+              "out": "Off"
+            },
+            {
+              "in": [
+                22
+              ],
+              "out": "Running"
+            },
+            {
+              "in": [
+                23
+              ],
+              "out": "Final phase"
+            },
+            {
+              "in": [
+                46
+              ],
+              "out": "Starting"
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    },
+    {
+      "id": "ready",
+      "name": "Programme control",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                1
+              ],
+              "out": "Running"
+            },
+            {
+              "in": [
+                3
+              ],
+              "out": "Paused"
+            },
+            {
+              "in": [
+                5
+              ],
+              "out": "Ended"
+            },
+            {
+              "in": [
+                35
+              ],
+              "out": "Started"
+            },
+            {
+              "in": [
+                36
+              ],
+              "out": "Start pending"
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    },
+    {
+      "id": "drying_goal",
+      "name": "Drying target",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                0
+              ],
+              "out": "Bügeltrocken"
+            },
+            {
+              "in": [
+                2
+              ],
+              "out": "Schranktrocken"
+            },
+            {
+              "in": [
+                3
+              ],
+              "out": "Schranktrocken+"
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:target"
+      }
+    },
+    {
+      "id": "hidden_0f_e000",
+      "name": "Hidden frame",
+      "kind": "hidden",
+      "match": {
+        "dest": "0x0F",
+        "cmd": "0xE000",
+        "payload": "05"
+      }
+    },
+    {
+      "id": "phase",
+      "name": "Programme phase",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1003",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "5": "Finished",
+            "10": "Starting",
+            "11": "Drying",
+            "7": "Finished",
+            "12": "Bügeltrocken erreicht",
+            "13": "Schranktrocken erreicht",
+            "9": "Wärmetauscher wird gespült"
+          },
+          "default": "Unknown (%d)"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:progress-clock"
+      }
+    },
+    {
+      "id": "fault",
+      "name": "Fault",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1007",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "None",
+            "1": "Lint filter",
+            "3": "Water tank"
+          },
+          "default": "Error %d"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:alert-circle-outline"
+      }
+    },
+    {
+      "id": "fault_group",
+      "name": "Fault group",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1007",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "ha": {
+        "icon": "mdi:alert-circle-outline",
+        "entity_category": "diagnostic",
+        "accuracy_decimals": 0
+      },
+      "transforms": []
+    },
+    {
+      "id": "spin_speed",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "u8",
+        "at": 3
+      },
+      "transforms": [
+        {
+          "op": "multiply",
+          "value": 25
+        },
+        {
+          "op": "offset",
+          "value": 600
+        }
+      ],
+      "ha": {
+        "device_class": "",
+        "unit_of_measurement": "rpm",
+        "state_class": "measurement",
+        "accuracy_decimals": 0,
+        "icon": "mdi:rotate-right"
+      }
+    },
+    {
+      "id": "residual_moisture",
+      "name": "Residual moisture",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1004",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "filter_out",
+          "values": [
+            0
+          ]
+        }
+      ],
+      "ha": {
+        "device_class": "humidity",
+        "unit_of_measurement": "%",
+        "state_class": "measurement",
+        "accuracy_decimals": 0,
+        "icon": "mdi:water-percent"
+      }
+    }
+  ]
+}

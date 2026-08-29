@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "sbv43m10eu",
+    "model": "SBV43M10EU",
+    "appliance": "dishwasher",
+    "source": "bsh-dbus-sbv43m10eu.yaml",
+    "credits": [
+      "Dominic Spatz",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "remain",
+      "from": "remain",
+      "name": "Time remaining",
+      "kind": "sensor"
+    },
+    {
+      "id": "rinse_aid",
+      "from": "rinse_aid",
+      "name": "Rinse aid",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:glass-cocktail"
+      }
+    },
+    {
+      "id": "salt",
+      "from": "salt",
+      "name": "Salt",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:shaker-outline"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "binary_sensor"
+    },
+    {
+      "id": "btn_start",
+      "name": "Start button",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x17",
+        "cmd": "0x1013",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "eq",
+        "at": 0,
+        "value": 1
+      },
+      "ha": {
+        "icon": "mdi:dishwasher"
+      }
+    }
+  ],
+  "extends": "base/dishwasher"
+}

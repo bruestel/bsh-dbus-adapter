@@ -1,0 +1,178 @@
+name: Release
+
+# Runs when a release is published, and can be run by hand to refresh the web
+# installer without cutting a release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Attach the images to this existing release, e.g. v0.6.0. Leave empty to only refresh the installer."
+        required: false
+        default: ""
+
+permissions:
+  contents: write   # attach assets to the release
+  pages: write      # publish the web installer
+  id-token: write
+
+# Two runs deploying to Pages at once is a race with no winner. Queued rather
+# than cancelled: an interrupted release would leave the installer pointing at
+# firmware it never finished attaching.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # ESP-IDF derives the app version via `git describe`; a shallow clone
+          # without tags would stamp the firmware with a bare commit hash.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install PlatformIO and esptool
+        # esptool is needed as a module for merge_bin. PlatformIO ships its own
+        # copy inside ~/.platformio, not on the Python path, so installing it
+        # here is not redundant. Pinned: esptool 5 renamed the subcommands and
+        # the flag spellings this job uses.
+        run: pip install --upgrade platformio "esptool~=4.9"
+
+      # The same gates CI runs. A release is published from whatever ref was
+      # asked for, and workflow_dispatch can name one that never went through
+      # CI -- so the checks run here too rather than being assumed.
+      - name: Host tests
+        run: |
+          cmake -S test/host -B test/host/build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build test/host/build -j
+          ctest --test-dir test/host/build --output-on-failure
+
+      - name: Profiles and API reference
+        run: |
+          python3 tools/factor_profiles.py --check profiles/
+          python3 tools/resolve_profiles.py profiles/ /tmp/resolved
+          python3 tools/check_api_docs.py
+
+      - name: Build both targets
+        run: |
+          pio run -e bouni-c6
+          pio run -e kiu-c3
+
+      - name: Collect the flash images
+        # Two shapes for two purposes. The installer writes the four parts at
+        # their own offsets, which leaves everything between them alone -- so a
+        # device keeps its WiFi credentials, its password and its stored
+        # profiles across an update. The merged single file spans a contiguous
+        # range from zero and therefore blanks all of that, which is what a
+        # first install wants.
+        #
+        # The offsets are the ones PlatformIO writes to .pio/build/<env>/flash_args
+        # and match partitions.csv: otadata at 0xf000, the app at 0x20000.
+        run: |
+          mkdir -p site/firmware/bouni-c6 site/firmware/kiu-c3
+
+          for env in bouni-c6 kiu-c3; do
+            for part in bootloader partitions ota_data_initial firmware; do
+              cp ".pio/build/$env/$part.bin" "site/firmware/$env/"
+            done
+          done
+
+          for env in bouni-c6 kiu-c3; do
+            case "$env" in
+              bouni-c6) chip=esp32c6 ;;
+              kiu-c3)   chip=esp32c3 ;;
+            esac
+            python -m esptool --chip "$chip" merge_bin \
+              -o "site/firmware/bsh-dbus-adapter-$env.bin" \
+              --flash_mode dio --flash_freq 80m --flash_size 4MB \
+              0x0     ".pio/build/$env/bootloader.bin" \
+              0x8000  ".pio/build/$env/partitions.bin" \
+              0xf000  ".pio/build/$env/ota_data_initial.bin" \
+              0x20000 ".pio/build/$env/firmware.bin"
+
+            # Also offered on its own, for a board that is already set up: this
+            # is the file the device's own OTA page accepts.
+            cp ".pio/build/$env/firmware.bin" "site/firmware/bsh-dbus-adapter-$env-app-only.bin"
+          done
+
+      - name: Assemble the web installer
+        env:
+          TAG_NAME: ${{ inputs.tag }}
+        run: |
+          # Without a tag this is a manual run to refresh the installer, and
+          # github.ref_name would be the branch: the page would announce
+          # "Version main". The last tag is what the build actually is.
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
+          fi
+          VERSION="${TAG_NAME#v}"
+          cp web/index.html site/
+          sed -i "s/{{VERSION}}/$VERSION/g" site/index.html
+
+          python - "$VERSION" <<'PY'
+          import json, sys
+
+          version = sys.argv[1]
+          # Parts at their real offsets rather than one blob at zero: the gaps,
+          # which hold NVS and the stored profiles, are simply not written.
+          targets = {
+              "bouni-c6": "ESP32-C6",
+              "kiu-c3":   "ESP32-C3",
+          }
+          for env, family in targets.items():
+              manifest = {
+                  "name": "bsh-dbus-adapter",
+                  "version": version,
+                  "new_install_prompt_erase": True,
+                  # This firmware does not speak Improv. Left at its default the
+                  # installer waits for it after flashing and then offers a
+                  # provisioning dialog that leads nowhere, while the page below
+                  # it explains how to join the setup network instead.
+                  "new_install_improv_wait_time": 0,
+                  "builds": [{
+                      "chipFamily": family,
+                      "parts": [
+                          {"path": f"firmware/{env}/bootloader.bin",       "offset": 0x0},
+                          {"path": f"firmware/{env}/partitions.bin",       "offset": 0x8000},
+                          {"path": f"firmware/{env}/ota_data_initial.bin", "offset": 0xf000},
+                          {"path": f"firmware/{env}/firmware.bin",         "offset": 0x20000},
+                      ],
+                  }],
+              }
+              with open(f"site/manifest-{env}.json", "w") as fh:
+                  json.dump(manifest, fh, indent=2)
+          PY
+
+      - name: Attach the images to the release
+        if: github.event_name == 'release' || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release upload "$TAG" \
+            site/firmware/bsh-dbus-adapter-bouni-c6.bin \
+            site/firmware/bsh-dbus-adapter-kiu-c3.bin \
+            site/firmware/bsh-dbus-adapter-bouni-c6-app-only.bin \
+            site/firmware/bsh-dbus-adapter-kiu-c3-app-only.bin \
+            --clobber
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  publish-installer:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

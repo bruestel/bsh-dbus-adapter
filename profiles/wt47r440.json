@@ -1,0 +1,192 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wt47r440",
+    "model": "WT47R440",
+    "appliance": "dryer",
+    "source": "bsh-dbus-wt47r440.yaml",
+    "credits": [
+      "Stefan Hirt",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Siemens",
+    "product": "Siemens iQ500"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "time_remaining",
+      "from": "time_remaining",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ],
+      "ha": {
+        "icon": "mdi:clock-outline"
+      }
+    },
+    {
+      "id": "anti_crease_time",
+      "from": "anti_crease_time",
+      "name": "Anti-crease",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "offset",
+          "value": -60
+        }
+      ],
+      "ha": {
+        "icon": "mdi:shield-refresh"
+      }
+    },
+    {
+      "id": "low_heat",
+      "from": "low_heat",
+      "name": "Low heat",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:feather"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program",
+      "name": "Drying programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Baumwolle extratrocken",
+            "2": "Baumwolle schranktrocken",
+            "3": "Baumwolle bügeltrocken",
+            "4": "Outdoor",
+            "5": "Handtücher",
+            "6": "Schnell/Mix",
+            "7": "zeitlich warm",
+            "8": "zeitlich kalt",
+            "9": "Dessous",
+            "10": "Wolle finish",
+            "11": "Super 40",
+            "12": "Hemden Business",
+            "13": "Pflegeleicht bügeltrocken",
+            "14": "Pflegeleicht schranktrocken",
+            "15": "Pflegeleicht extratrocken"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tshirt-crew-outline"
+      }
+    },
+    {
+      "id": "fine_adjust",
+      "from": "fine_adjust",
+      "name": "Dryness level",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "6": "Off",
+            "8": "I",
+            "10": "II",
+            "12": "III"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:white-balance-sunny"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Unknown",
+            "3": "Open",
+            "6": "Closed"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "status",
+      "from": "status",
+      "name": "Status",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "12": "Ready or paused",
+            "20": "Off",
+            "22": "Running",
+            "41": "Paused",
+            "65": "Ready or paused",
+            "77": "Standby"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    },
+    {
+      "id": "ready",
+      "from": "ready",
+      "name": "Ready to start",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "1": "Running",
+            "3": "Ready to start",
+            "35": "Started",
+            "36": "Delayed start"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    },
+    {
+      "id": "finished",
+      "from": "finished",
+      "name": "Finished",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "5": "Paused",
+            "12": "Ready or paused",
+            "22": "Running"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tumble-dryer"
+      }
+    }
+  ],
+  "extends": "base/dryer"
+}

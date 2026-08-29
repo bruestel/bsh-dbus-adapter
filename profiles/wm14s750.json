@@ -1,0 +1,291 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wm14s750",
+    "model": "WM14S750",
+    "appliance": "washing_machine",
+    "source": "bsh-dbus-wm14s750.yaml",
+    "credits": [
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Siemens",
+    "product": "Siemens"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "temperature",
+      "from": "temperature",
+      "name": "Temperature",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "calibrate_linear",
+          "datapoints": [
+            [
+              0.0,
+              20.0
+            ],
+            [
+              1.0,
+              30.0
+            ],
+            [
+              2.0,
+              40.0
+            ],
+            [
+              3.0,
+              50.0
+            ],
+            [
+              4.0,
+              60.0
+            ],
+            [
+              5.0,
+              70.0
+            ],
+            [
+              6.0,
+              80.0
+            ],
+            [
+              7.0,
+              90.0
+            ]
+          ]
+        }
+      ],
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "rpm",
+      "from": "rpm",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "multiply",
+          "value": 10.0
+        }
+      ]
+    },
+    {
+      "id": "unbalance_x",
+      "from": "unbalance_x",
+      "name": "Unbalance X",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-x-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "unbalance_z",
+      "from": "unbalance_z",
+      "name": "Unbalance Z",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-z-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "unbalance_y",
+      "from": "unbalance_y",
+      "name": "Unbalance Y",
+      "kind": "sensor",
+      "behavior": {
+        "throttle_ms": 30000,
+        "expire_after_s": 90
+      },
+      "ha": {
+        "icon": "mdi:axis-y-rotate-clockwise",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "remain",
+      "from": "remain_2",
+      "name": "Time remaining",
+      "kind": "sensor"
+    },
+    {
+      "id": "feat_waterplus",
+      "from": "feat_waterplus_2",
+      "name": "Water plus",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "feat_stains",
+      "from": "feat_stains",
+      "name": "Stain removal",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:liquid-spot"
+      }
+    },
+    {
+      "id": "feat_prewash",
+      "from": "feat_prewash_2",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:rotate-orbit"
+      }
+    },
+    {
+      "id": "feat_anticrease",
+      "from": "feat_anticrease",
+      "name": "Anti-crease",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:iron"
+      }
+    },
+    {
+      "id": "start_button",
+      "from": "start_button",
+      "name": "Start button",
+      "kind": "binary_sensor",
+      "behavior": {
+        "momentary_ms": 1000
+      },
+      "ha": {
+        "icon": "mdi:button-pointer"
+      }
+    },
+    {
+      "id": "program_started",
+      "from": "program_started",
+      "name": "Programme started",
+      "kind": "binary_sensor",
+      "behavior": {
+        "momentary_ms": 1000
+      },
+      "ha": {
+        "icon": "mdi:ray-start-arrow",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program_2",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Koch/Bunt",
+            "2": "Pflegeleicht",
+            "3": "Schnell/Mix",
+            "4": "Fein/Seide",
+            "5": "Wolle",
+            "6": "Rinsing",
+            "7": "Spinning",
+            "8": "Draining",
+            "9": "Gentle spin",
+            "10": "Super 15",
+            "11": "Outdoor Imprägnieren",
+            "12": "Hemden/Business",
+            "13": "Pflegeleicht Plus",
+            "14": "Liebling 1",
+            "15": "Liebling 2"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:numeric"
+      }
+    },
+    {
+      "id": "washmodule",
+      "from": "washmodule",
+      "name": "Wash module",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "3": "Detergent intake (3)",
+            "4": "Water intake (4)",
+            "5": "Heating (5)",
+            "6": "Tumbling (6)",
+            "9": "Abpumpen / Schleudern (9)",
+            "13": "Rinsing (13)",
+            "15": "Abpumpen / Schleudern (15)",
+            "16": "Rinsing (16)",
+            "20": "Abpumpen / Schleudern  (20)",
+            "23": "Rinsing (23)",
+            "26": "Final spin (26)",
+            "28": "Tumbling (28)"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:map-marker-path",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Closed, not locked",
+            "1": "Closed and locked",
+            "2": "Open"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "state",
+      "from": "state",
+      "name": "Status",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Stopped or ready",
+            "1": "Finished",
+            "2": "Running"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:state-machine"
+      }
+    }
+  ],
+  "extends": "base/washing-machine"
+}

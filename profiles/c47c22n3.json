@@ -1,0 +1,255 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "c47c22n3",
+    "model": "C47C22N3",
+    "appliance": "steamer",
+    "source": "bsh-dbus-c47c22n3.yaml",
+    "credits": [
+      "stefanhirt",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Neff",
+    "product": "Neff"
+  },
+  "bus": {
+    "baud": 19200
+  },
+  "entities": [
+    {
+      "id": "temperature",
+      "name": "Temperature, actual",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7206",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "icon": "mdi:thermometer",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "target_temperature",
+      "name": "Temperature, target",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x10",
+        "cmd": "0x7201",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 2
+      },
+      "ha": {
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "state_class": "measurement",
+        "icon": "mdi:thermometer",
+        "accuracy_decimals": 0
+      }
+    },
+    {
+      "id": "t2",
+      "name": "T2",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7403",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 2
+      },
+      "ha": {
+        "state_class": "measurement"
+      }
+    },
+    {
+      "id": "standby",
+      "name": "Powered on",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x00",
+        "cmd": "0x7004",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "ha": {
+        "device_class": "power"
+      }
+    },
+    {
+      "id": "signal_beep",
+      "name": "Signal",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x10",
+        "cmd": "0x7225",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "offset",
+          "value": -39
+        }
+      ],
+      "behavior": {
+        "expire_after_s": 60
+      },
+      "ha": {
+        "device_class": "sound"
+      }
+    },
+    {
+      "id": "door",
+      "name": "Door closed",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7217",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "invert"
+        }
+      ],
+      "ha": {
+        "device_class": "door"
+      }
+    },
+    {
+      "id": "fan",
+      "name": "Fan",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7228",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "u8",
+        "at": 4
+      },
+      "transforms": [
+        {
+          "op": "offset",
+          "value": -7
+        }
+      ],
+      "ha": {
+        "icon": "mdi:fan"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x10",
+        "cmd": "0x720d",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "ha": {
+        "device_class": "light"
+      }
+    },
+    {
+      "id": "t1",
+      "name": "T1",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7271",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      }
+    },
+    {
+      "id": "mode",
+      "name": "Mode",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x10",
+        "cmd": "0x7201",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "23": "Heißluft",
+            "32": "Dampfgarstufe",
+            "33": "CircoSteam®",
+            "37": "Regenerieren",
+            "41": "Entkalken"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:form-select"
+      }
+    },
+    {
+      "id": "water",
+      "name": "Water tank",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x20",
+        "cmd": "0x7274",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "i8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "empty",
+            "127": "low",
+            "250": "OK"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:cup-water"
+      }
+    }
+  ]
+}

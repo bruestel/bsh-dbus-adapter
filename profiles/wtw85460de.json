@@ -1,0 +1,177 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "wtw85460de",
+    "model": "WTW85460DE",
+    "appliance": "dryer",
+    "source": "bsh-dbus-wtw85460de.yaml",
+    "credits": [
+      "Kim Marcel Zeuner",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch Series 6"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "anti_crease_time",
+      "from": "anti_crease_time",
+      "name": "Anti-crease",
+      "kind": "sensor",
+      "transforms": [
+        {
+          "op": "offset",
+          "value": -60
+        }
+      ],
+      "ha": {
+        "icon": "mdi:shield-refresh"
+      }
+    },
+    {
+      "id": "low_heat",
+      "from": "low_heat",
+      "name": "Low heat",
+      "kind": "binary_sensor",
+      "ha": {
+        "icon": "mdi:feather"
+      }
+    },
+    {
+      "id": "door",
+      "from": "door",
+      "name": "Door",
+      "kind": "binary_sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                3
+              ],
+              "out": true
+            },
+            {
+              "in": [
+                6
+              ],
+              "out": false
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "device_class": "door"
+      }
+    },
+    {
+      "id": "running",
+      "from": "status",
+      "name": "Running",
+      "kind": "binary_sensor",
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                22
+              ],
+              "out": true
+            },
+            {
+              "in": [
+                2,
+                20,
+                41,
+                77
+              ],
+              "out": false
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "device_class": "running"
+      }
+    },
+    {
+      "id": "power_on",
+      "name": "Powered on",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "eq",
+        "at": 0,
+        "value": 37,
+        "invert": true
+      },
+      "ha": {
+        "device_class": "power"
+      }
+    },
+    {
+      "id": "program",
+      "from": "program",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "Off",
+            "1": "Baumwolle schranktrocken extra",
+            "2": "Baumwolle schranktrocken",
+            "3": "Baumwolle bügeltrocken",
+            "4": "Sportswear",
+            "5": "Handtücher",
+            "6": "Schnell/Mix",
+            "7": "Zeitprogramm warm",
+            "8": "Zeitprogramm kalt",
+            "9": "Wolle finish",
+            "10": "Daunen",
+            "11": "ExtraKurz 40",
+            "12": "Hemden",
+            "13": "Pflegeleicht bügeltrocken",
+            "14": "Pflegeleicht schranktrocken",
+            "15": "Pflegeleicht schranktrocken extra"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:tshirt-crew-outline"
+      }
+    },
+    {
+      "id": "fine_adjust",
+      "from": "fine_adjust",
+      "name": "Dryness level",
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "6": "Off",
+            "8": "I",
+            "10": "II",
+            "12": "III"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:white-balance-sunny"
+      }
+    }
+  ],
+  "extends": "base/dryer"
+}
