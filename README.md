@@ -123,20 +123,21 @@ unpopulated.
 
 As a worked example, the dryer this firmware was written against: two screws at
 the back hold the lid, and with those out the lid slides backwards and lifts
-off. That exposes the screws for the front panel. Behind the panel sits the
-control board, and the bus was right there:
+off. A few more screws hold the front, and behind it you reach the back of the
+display. The bus was right there:
 
-![The control board behind a dryer's front panel: three connectors in a row, with the middle three-pin one circled in red](docs/images/dbus-connector-dryer.jpg)
+![The back of a dryer's display board: three connectors in a row, with the middle three-pin one circled in red](docs/images/dbus-connector-dryer.jpg)
 
 *The circled connector is the bus, three pins between two wider neighbours.
 Which of its outer pins is which, and whether a three-pin header you find on
 another machine is really the bus, the multimeter below will tell you.*
 
-A header you find may already be occupied, as it is here. That is not a problem:
-the D-Bus is a shared line that every board on it listens to, so an adapter
-wired in parallel (through a Y-cable, or a spare header on the same board)
-hears everything without displacing anything. This firmware only ever listens,
-so nothing on the bus notices it is there.
+On this dryer the header was free and the adapter plugged straight into it. A
+header you find may well be occupied instead, in which case look over the
+board for a free one: the D-Bus is a shared line that every board on it
+listens to, so an adapter on any spare header hears everything without
+displacing anything. This firmware only ever listens, so nothing on the bus
+notices it is there.
 
 ### Telling the three pins apart
 
