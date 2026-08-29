@@ -3211,6 +3211,7 @@ function toEsphomeYaml(src, slug){
   const product = meta.product || '';
   const title = [product.startsWith(maker) ? '' : maker, product, meta.model]
                   .filter(Boolean).join(' ');
+  const hw = (typeof info === 'object' && info && info.hardware) || {};
   const L = [];
   L.push('#');
   L.push(`# bsh-dbus-${slug}.yaml -- Interface B/S/H/ ${meta.appliance || 'appliance'}`
@@ -3220,6 +3221,15 @@ function toEsphomeYaml(src, slug){
   if(meta.source) L.push(`# Origin: ${meta.source}`);
   if((meta.credits || []).length) L.push(`# Reverse engineered by ${meta.credits.join(', ')}`);
   L.push('#');
+  /* Said once rather than at every value: the profile refuses a frame that is
+     too short, and a lambda cannot, so the difference belongs in the header
+     instead of fourteen times in the body. */
+  if((src.entities || []).some(e => e.match && e.match.min_len)){
+    L.push('# The profile this came from refuses a frame shorter than the byte it needs.');
+    L.push('# The lambdas below cannot express that and read the byte regardless, which is');
+    L.push('# how the configurations here already work.');
+    L.push('#');
+  }
   L.push('# This program is free software: you can redistribute it and/or modify');
   L.push('# it under the terms of the GNU General Public License version 3.0 as');
   L.push('# published by the Free Software Foundation.');
@@ -3232,8 +3242,19 @@ function toEsphomeYaml(src, slug){
   L.push('external_components:');
   L.push('  - source: github://hn/bsh-home-appliances@master');
   L.push('');
+  /* This device's own chip and pins when it has told us, the Bouni board's
+     otherwise -- which is what eight of the thirteen configurations upstream
+     use, so it is the right guess when there is nothing to go on. */
+  const chip = hw.chip || 'esp32c6';
+  /* Both keys, which is what the reference configuration upstream does and
+     seven of the eleven there in some form. The variant alone is accepted by
+     ESPHome, but a board name is what the rest of the repository looks like,
+     and a devkit definition is the right generic answer for a bare module. */
+  const boards = {esp32c3: 'esp32-c3-devkitm-1', esp32c6: 'esp32-c6-devkitc-1',
+                  esp32s3: 'esp32-s3-devkitc-1', esp32: 'esp32dev'};
   L.push('esp32:');
-  L.push('  variant: esp32c6');
+  if(boards[chip]) L.push(`  board: ${boards[chip]}`);
+  L.push(`  variant: ${chip}`);
   L.push('  framework:');
   L.push('    type: esp-idf');
   L.push('');
@@ -3250,33 +3271,121 @@ function toEsphomeYaml(src, slug){
   L.push('wifi:');
   L.push('  ssid: !secret wifi_ssid');
   L.push('  password: !secret wifi_password');
+  /* Carried over rather than invented: several appliances cannot supply the
+     current a radio draws at full power, and the configurations upstream all
+     answer it with the same 10.5 dB. Left commented, because whether a given
+     machine needs it is found out the hard way. */
+  L.push('  # Dirty workaround if the machine\'s power supply unit cannot provide enough current:');
+  L.push('  # output_power: 10.5dB');
   L.push('');
+  L.push('  # Enable fallback hotspot (captive portal) in case wifi connection fails');
+  L.push('  ap:');
+  L.push(`    ssid: "D-Bus-${meta.model || slug} Fallback Hotspot"`);
+  L.push('    password: !secret wifi_ap_password');
+  L.push('');
+  L.push('captive_portal:');
+  L.push('');
+  /* Only when the board has one and has said which pin. */
+  if(hw.led_pin >= 0){
+    L.push('status_led:');
+    L.push('  pin:');
+    L.push(`    number: GPIO${hw.led_pin}`);
+    if(hw.led_inverted) L.push('    inverted: true');
+    L.push('');
+  }
+  L.push('# Pins as configured on the device this was exported from.');
+  L.push('# Adjust for a different adapter.');
   L.push('uart:');
   L.push('  - id: dbus_uart');
-  L.push('    rx_pin: GPIO4');
-  L.push('    tx_pin: GPIO5');
+  L.push(`    rx_pin: GPIO${hw.rx_pin >= 0 ? hw.rx_pin : 4}`);
+  /* A board may drive no TX line at all, and several configurations upstream
+     leave the key out entirely. Only an explicit -1 means that; not knowing
+     falls back to the usual pin. */
+  if(hw.tx_pin === undefined || hw.tx_pin >= 0)
+    L.push(`    tx_pin: GPIO${hw.tx_pin >= 0 ? hw.tx_pin : 5}`);
   L.push(`    baud_rate: ${(src.bus && src.bus.baud) || 9600}`);
   L.push('');
+  /* The activity LED, driven the way the reference configuration drives it: a
+     short blink per frame. Nine of the thirteen configurations upstream declare
+     this output, and it is the ESPHome counterpart of what this firmware does
+     with the same pin. */
+  if(hw.activity_pin >= 0){
+    L.push('output:');
+    L.push('  - platform: gpio');
+    L.push('    pin:');
+    L.push(`      number: GPIO${hw.activity_pin}`);
+    if(hw.led_inverted) L.push('      inverted: true');
+    L.push('    id: activity_led');
+    L.push('');
+  }
   L.push('bshdbus:');
   L.push('  uart_id: dbus_uart');
-  L.push('');
-  L.push('sensor:');
+  if(hw.activity_pin >= 0){
+    L.push('  on_frame:');
+    L.push('    - output.turn_on: activity_led');
+    L.push('    - delay: 20ms');
+    L.push('    - output.turn_off: activity_led');
+  }
 
+  /* Three top-level keys, not one. A binary_sensors block nested under
+     "sensor:" is rejected by ESPHome, and the export used to emit exactly that
+     -- which mattered, because this file exists to be sent upstream. Within a
+     key the entries are grouped by address, the shape the configurations there
+     already use. */
   const section = {sensor: 'sensors', text_sensor: 'text_sensors', binary_sensor: 'binary_sensors'};
+  const kinds = [['sensor', 'sensor'], ['binary_sensor', 'binary_sensor'],
+                 ['text_sensor', 'text_sensor']];
   let skipped = 0;
-  for(const e of src.entities || []){
-    if(e.kind === 'hidden'){ skipped++; continue; }
-    const lam = lambdaFor(e);
-    const warn = [];
-    if(!lam){
-      L.push(`  # ${e.id}: the "${(e.extract || {}).op}" extraction has no lambda equivalent here`);
-      continue;
+  const unconverted = [];
+
+  for(const [kind, key] of kinds){
+    const mine = (src.entities || []).filter(e => (e.kind || 'sensor') === kind);
+    if(!mine.length) continue;
+
+    /* One platform block per address, however many values it carries. */
+    const byAddress = new Map();
+    for(const e of mine){
+      const k = `${e.match.dest}|${e.match.cmd}`;
+      if(!byAddress.has(k)) byAddress.set(k, []);
+      byAddress.get(k).push(e);
     }
-    const f = filtersFor(e, warn);
-    L.push('  - platform: bshdbus');
-    L.push(`    dest: ${e.match.dest}`);
-    L.push(`    command: ${e.match.cmd}`);
-    L.push(`    ${section[e.kind] || 'sensors'}:`);
+
+    const body = [];
+    for(const [, group] of byAddress){
+      const entries = [];
+      for(const e of group){
+        const lam = lambdaFor(e);
+        if(!lam){
+          unconverted.push(`# ${e.id}: the "${(e.extract || {}).op}" extraction has no `
+                         + 'lambda equivalent here');
+          continue;
+        }
+        entries.push([e, lam]);
+      }
+      if(!entries.length) continue;
+      body.push('  - platform: bshdbus');
+      body.push(`    dest: ${group[0].match.dest}`);
+      body.push(`    command: ${group[0].match.cmd}`);
+      body.push(`    ${section[kind]}:`);
+      for(const [e, lam] of entries) body.push(...entryLines(e, lam));
+    }
+    if(body.length){ L.push(''); L.push(`${key}:`); L.push(...body); }
+  }
+  for(const e of src.entities || []) if(e.kind === 'hidden') skipped++;
+  if(unconverted.length){ L.push(''); for(const u of unconverted) L.push(u); }
+
+  if(skipped)
+    L.push(`# ${skipped} hidden marker(s) left out: they exist only to fold frames out of`
+         + ' this project\'s monitor and have no ESPHome equivalent.');
+  return L.join('\n') + '\n';
+}
+
+/* The lines describing one value, indented for a platform block. */
+function entryLines(e, lam){
+  const L = [];
+  const warn = [];
+  const f = filtersFor(e, warn);
+  {
     L.push(`      - id: bsh_${e.id}`);
     L.push(`        name: ${e.name || e.id}`);
     if(e.ha && e.ha.icon) L.push(`        icon: ${e.ha.icon}`);
@@ -3285,20 +3394,11 @@ function toEsphomeYaml(src, slug){
     if(e.ha && e.ha.state_class) L.push(`        state_class: ${e.ha.state_class}`);
     if(e.ha && e.ha.entity_category) L.push(`        entity_category: ${e.ha.entity_category}`);
     if(e.ha && e.ha.accuracy_decimals >= 0) L.push(`        accuracy_decimals: ${e.ha.accuracy_decimals}`);
-    /* The length guard has no counterpart: upstream lambdas read the byte they
-       want and trust the frame to be long enough. Worth saying out loud, since
-       this profile does check. */
-    if(e.match && e.match.min_len)
-      warn.push(`this profile only reads the frame when it carries at least `
-              + `${e.match.min_len} data bytes; the lambda below does not check`);
     for(const w of warn) L.push(`        # NOTE: ${w}`);
     L.push(`        lambda: ${lam}`);
     if(f.length){ L.push('        filters:'); L.push(...f); }
   }
-  if(skipped)
-    L.push(`  # ${skipped} hidden marker(s) left out: they exist only to fold frames out of`
-         + ' this project\'s monitor and have no ESPHome equivalent.');
-  return L.join('\n') + '\n';
+  return L;
 }
 
 /* The catalogue: every profile the firmware carries, read-only, each one
