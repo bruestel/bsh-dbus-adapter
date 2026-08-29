@@ -108,9 +108,15 @@ jobs:
         run: |
           # Without a tag this is a manual run to refresh the installer, and
           # github.ref_name would be the branch: the page would announce
-          # "Version main". The last tag is what the build actually is.
+          # "Version main".
+          #
+          # Described rather than reduced to the last tag: a manual run builds
+          # whatever the branch holds, which after a few commits is no longer
+          # that release. Labelling it "0.6.6" would put a number on firmware
+          # nobody can go back to. "0.6.6-3-gabc1234" says what it is, and says
+          # it on the page somebody is about to flash from.
           if [ -z "$TAG_NAME" ]; then
-            TAG_NAME="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
+            TAG_NAME="$(git describe --tags 2>/dev/null || echo v0.0.0)"
           fi
           VERSION="${TAG_NAME#v}"
           cp web/index.html site/
