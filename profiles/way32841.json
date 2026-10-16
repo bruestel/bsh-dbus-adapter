@@ -1,0 +1,712 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "way32841",
+    "model": "WAY32841",
+    "appliance": "washing_machine",
+    "source": "written from bus logs of a WAY32841/23 (based on wav28g43 and wu14ut40)",
+    "credits": [
+      "ThxGiving",
+      "MichaelHeimann",
+      "satchafunkilus",
+      "Hajo Noerenberg"
+    ],
+    "manufacturer": "Bosch",
+    "product": "Bosch HomeProfessional i-DOS"
+  },
+  "bus": {
+    "baud": 9600
+  },
+  "entities": [
+    {
+      "id": "program",
+      "name": "Programme",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "default": "Programm %d",
+          "values": {
+            "0": "Aus",
+            "1": "Baumwolle",
+            "2": "Pflegeleicht",
+            "3": "Schnell/Mix",
+            "4": "Fein/Seide",
+            "5": "Wolle",
+            "6": "AllergiePlus",
+            "8": "Sportswear",
+            "9": "ExtraKurz 15'",
+            "10": "Hemden",
+            "11": "Pflegeleicht Plus",
+            "12": "Memory",
+            "13": "Auto Sanft",
+            "14": "Auto"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:numeric"
+      }
+    },
+    {
+      "id": "program_phase",
+      "name": "Programme phase",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1003",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "3": "Waschmittel einspülen",
+            "4": "Beladungserkennung",
+            "5": "Waschen",
+            "6": "Waschen",
+            "7": "Abkühlen",
+            "9": "Zwischenschleudern",
+            "11": "Spülen",
+            "12": "Zwischenschleudern",
+            "13": "Spülen",
+            "20": "Zwischenschleudern",
+            "24": "Übergang Endschleudern",
+            "26": "Endschleudern",
+            "28": "Auflockern",
+            "49": "Weichspüler",
+            "53": "Beladungserkennung",
+            "14": "Spülen",
+            "15": "Zwischenschleudern",
+            "17": "Spülen",
+            "23": "Spülen mit Weichspüler",
+            "8": "Waschen",
+            "10": "Abpumpen"
+          },
+          "default": "Code %d"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:middleware"
+      }
+    },
+    {
+      "id": "remain",
+      "name": "Time remaining",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1002",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u16be",
+        "at": 0
+      },
+      "ha": {
+        "device_class": "duration",
+        "unit_of_measurement": "min",
+        "state_class": "measurement",
+        "accuracy_decimals": 0
+      },
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 60
+        }
+      ],
+      "behavior": {
+        "countdown": {
+          "every_s": 60,
+          "by": 1,
+          "min": 0,
+          "while": {
+            "entity": "state",
+            "is": "Läuft"
+          }
+        }
+      }
+    },
+    {
+      "id": "state",
+      "name": "Status",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1000",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "kind": "text_sensor",
+      "transforms": [
+        {
+          "op": "filter_out",
+          "values": [
+            41,
+            67,
+            12
+          ]
+        },
+        {
+          "op": "map",
+          "values": {
+            "2": "Fertig",
+            "10": "Läuft",
+            "20": "Aus",
+            "23": "Läuft",
+            "33": "Läuft",
+            "34": "Läuft",
+            "35": "Läuft",
+            "36": "Läuft",
+            "37": "Läuft",
+            "38": "Läuft",
+            "39": "Läuft",
+            "22": "Läuft",
+            "46": "Startet",
+            "57": "Bereit",
+            "61": "Startet",
+            "9": "Läuft"
+          },
+          "default": "Code %d"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:state-machine"
+      }
+    },
+    {
+      "id": "door",
+      "name": "Door",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1000",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u16be",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "lookup",
+          "rules": [
+            {
+              "in": [
+                10499
+              ],
+              "out": "Offen"
+            },
+            {
+              "in": [
+                10501
+              ],
+              "out": "Verriegelt"
+            },
+            {
+              "in": [
+                10502,
+                10503
+              ],
+              "out": "Geschlossen"
+            }
+          ],
+          "default": "hold"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:door"
+      }
+    },
+    {
+      "id": "temperature",
+      "name": "Temperature",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u8",
+        "at": 2
+      },
+      "ha": {
+        "icon": "mdi:thermometer"
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "default": "Stufe %d",
+          "values": {
+            "0": "kalt",
+            "1": "20 °C",
+            "2": "30 °C",
+            "3": "40 °C",
+            "4": "50 °C",
+            "5": "60 °C",
+            "6": "70 °C",
+            "7": "90 °C"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rpm",
+      "name": "Spin speed",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "ha": {
+        "unit_of_measurement": "rpm",
+        "state_class": "measurement",
+        "accuracy_decimals": 0,
+        "icon": "mdi:rotate-right"
+      },
+      "transforms": [
+        {
+          "op": "multiply",
+          "value": 10.0
+        }
+      ]
+    },
+    {
+      "id": "feat_waterplus",
+      "name": "Water plus",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "mask",
+        "at": 5,
+        "mask": 2
+      },
+      "ha": {
+        "icon": "mdi:water-plus"
+      }
+    },
+    {
+      "id": "feat_prewash",
+      "name": "Pre-wash",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "mask",
+        "at": 5,
+        "mask": 128
+      },
+      "ha": {
+        "icon": "mdi:rotate-orbit"
+      }
+    },
+    {
+      "id": "feat_speedperfect",
+      "name": "SpeedPerfect",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "mask",
+        "at": 5,
+        "mask": 64,
+        "invert": true
+      },
+      "ha": {
+        "icon": "mdi:clock-fast"
+      }
+    },
+    {
+      "id": "operation",
+      "name": "Control state",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "default": "Code %d",
+          "values": {
+            "1": "Läuft",
+            "3": "Bereit",
+            "5": "Fertig",
+            "6": "Startet",
+            "11": "Bedienung",
+            "12": "Bereit",
+            "33": "Start angefordert",
+            "35": "Starttaste gedrückt",
+            "36": "Start ausgelöst",
+            "37": "Aus"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:gesture-tap-button"
+      }
+    },
+    {
+      "id": "feat_ecoperfect",
+      "name": "EcoPerfect",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 6
+      },
+      "extract": {
+        "op": "mask",
+        "at": 5,
+        "mask": 32
+      },
+      "ha": {
+        "icon": "mdi:leaf"
+      }
+    },
+    {
+      "id": "feat_anticrease",
+      "name": "Anti-crease",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 128
+      },
+      "ha": {
+        "icon": "mdi:tshirt-crew"
+      }
+    },
+    {
+      "id": "idos1",
+      "name": "i-DOS 1 (softener)",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 4
+      },
+      "ha": {
+        "icon": "mdi:flower"
+      }
+    },
+    {
+      "id": "idos2",
+      "name": "i-DOS 2 (detergent)",
+      "kind": "binary_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 7
+      },
+      "extract": {
+        "op": "mask",
+        "at": 6,
+        "mask": 8
+      },
+      "ha": {
+        "icon": "mdi:water"
+      }
+    },
+    {
+      "id": "idos1_level",
+      "name": "i-DOS 1 level",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "bits",
+        "at": 3,
+        "shift": 4,
+        "mask": 3
+      },
+      "ha": {
+        "icon": "mdi:flower"
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "default": "Stufe %d",
+          "values": {
+            "0": "aus",
+            "1": "niedrig",
+            "2": "normal",
+            "3": "hoch"
+          }
+        }
+      ]
+    },
+    {
+      "id": "idos2_level",
+      "name": "i-DOS 2 level",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x11",
+        "cmd": "0x1006",
+        "min_len": 4
+      },
+      "extract": {
+        "op": "bits",
+        "at": 3,
+        "shift": 2,
+        "mask": 3
+      },
+      "ha": {
+        "icon": "mdi:water"
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "default": "Stufe %d",
+          "values": {
+            "0": "aus",
+            "1": "niedrig",
+            "2": "normal",
+            "3": "hoch"
+          }
+        }
+      ]
+    },
+    {
+      "id": "idos_tank",
+      "name": "i-DOS dosing tank",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x61",
+        "cmd": "0x6002",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "default": "Tank %d",
+          "values": {
+            "2": "i-DOS 2 (Waschmittel)",
+            "3": "i-DOS 1 (Weichspüler)"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:cup-water",
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "idos_amount",
+      "name": "i-DOS dosing amount",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x61",
+        "cmd": "0x6002",
+        "min_len": 3
+      },
+      "extract": {
+        "op": "u16be",
+        "at": 1
+      },
+      "ha": {
+        "icon": "mdi:cup-water",
+        "accuracy_decimals": 0,
+        "entity_category": "diagnostic"
+      }
+    },
+    {
+      "id": "error",
+      "name": "Hint",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x21",
+        "cmd": "0x1007",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u16be",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "filter_out",
+          "values": [
+            0
+          ]
+        },
+        {
+          "op": "map",
+          "default": "Hinweis %d",
+          "values": {
+            "3409": "i-DOS 2 (Waschmittel) nachfüllen"
+          }
+        }
+      ],
+      "ha": {
+        "icon": "mdi:alert-circle-outline"
+      },
+      "behavior": {
+        "expire_after_s": 21600
+      }
+    },
+    {
+      "id": "rpm_real",
+      "name": "Drum speed",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x13",
+        "cmd": "0x3015",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 3
+      },
+      "ha": {
+        "unit_of_measurement": "rpm",
+        "accuracy_decimals": 0,
+        "icon": "mdi:rotate-right"
+      },
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 16
+        }
+      ]
+    },
+    {
+      "id": "rpm_target",
+      "name": "Drum speed, target",
+      "kind": "sensor",
+      "match": {
+        "dest": "0x33",
+        "cmd": "0x3001",
+        "min_len": 5
+      },
+      "extract": {
+        "op": "i16be",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "divide",
+          "value": 16
+        }
+      ],
+      "ha": {
+        "unit_of_measurement": "rpm",
+        "accuracy_decimals": 0,
+        "icon": "mdi:rotate-right"
+      }
+    },
+    {
+      "id": "direction",
+      "name": "Drum direction",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x33",
+        "cmd": "0x3001",
+        "min_len": 1
+      },
+      "extract": {
+        "op": "u8",
+        "at": 0
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "114": "Rechts",
+            "108": "Links"
+          },
+          "default": "Code %d"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:reload"
+      }
+    },
+    {
+      "id": "motor_state",
+      "name": "Motor state",
+      "kind": "text_sensor",
+      "match": {
+        "dest": "0x13",
+        "cmd": "0x3015",
+        "min_len": 2
+      },
+      "extract": {
+        "op": "u8",
+        "at": 1
+      },
+      "transforms": [
+        {
+          "op": "map",
+          "values": {
+            "0": "dreht rechts",
+            "3": "dreht links",
+            "4": "beschleunigt rechts",
+            "7": "beschleunigt links",
+            "6": "bremst (links)",
+            "8": "aus",
+            "2": "trudelt aus (links)"
+          },
+          "default": "Code %d"
+        }
+      ],
+      "ha": {
+        "icon": "mdi:engine",
+        "entity_category": "diagnostic"
+      }
+    }
+  ]
+}
