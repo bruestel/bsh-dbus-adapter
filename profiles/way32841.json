@@ -43,13 +43,18 @@
             "4": "Fein/Seide",
             "5": "Wolle",
             "6": "AllergiePlus",
-            "8": "Sportswear",
-            "9": "ExtraKurz 15'",
-            "10": "Hemden",
-            "11": "Pflegeleicht Plus",
-            "12": "Memory",
-            "13": "Auto Sanft",
-            "14": "Auto"
+            "7": "Sportswear",
+            "8": "ExtraKurz 15'",
+            "9": "Hemden",
+            "10": "Pflegeleicht Plus",
+            "11": "Auto Sanft",
+            "12": "Auto",
+            "15": "Daunen",
+            "16": "Handtücher",
+            "17": "Spülen",
+            "18": "Schleudern",
+            "19": "Sanft Schleudern",
+            "20": "Abpumpen"
           }
         }
       ],
@@ -558,6 +563,7 @@
         "at": 1
       },
       "ha": {
+        "unit_of_measurement": "ml",
         "icon": "mdi:cup-water",
         "accuracy_decimals": 0,
         "entity_category": "diagnostic"
