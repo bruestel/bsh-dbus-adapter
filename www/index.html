@@ -611,9 +611,9 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
   <section class="card">
     <h2>MQTT</h2>
     <p class="sub">Publishes decoded readings to a broker, so the appliance reaches Home
-      Assistant and anything else that listens. Readings are retained: whoever connects next
-      sees the current state instead of waiting for the machine to change its mind — which on
-      an idle appliance can take hours.</p>
+      Assistant and anything else that listens. Readings are not retained, so the broker never
+      hands out a value nobody can date: the whole set is sent again whenever the adapter
+      connects and whenever Home Assistant restarts.</p>
 
     <div class="toggle">
       <div><b>Enabled</b><small>Publishes readings to the broker below.</small></div>
@@ -2972,7 +2972,7 @@ function idField(e){
     }
     say('ed-msg', `Renamed to "${want}".`
       + (followed ? ` ${followed} countdown gate${followed > 1 ? 's' : ''} followed it.` : '')
-      + ' Its MQTT topic changes with it; the old one keeps its last retained value.', 'ok');
+      + ' Its MQTT topic changes with it.', 'ok');
     markDirty();
     renderEditor();
   };
