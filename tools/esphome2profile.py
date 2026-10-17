@@ -630,6 +630,7 @@ def _guess_appliance(friendly, stem, header=""):
         ("refrigerator", "fridge"), ("fridge", "fridge"), ("kühlschrank", "fridge"),
         ("steamer", "steamer"), ("dampfgarer", "steamer"),
         ("extractor", "hood"), ("dunstabzug", "hood"), ("hood", "hood"),
+        ("kaffee", "coffee_machine"), ("coffee", "coffee_machine"), ("espresso", "coffee_machine"),
         ("oven", "oven"), ("backofen", "oven"), ("herd", "oven"),
     ):
         if needle in hay:
