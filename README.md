@@ -14,9 +14,7 @@ serves a web interface with a live bus monitor, an editor for writing a profile
 against the traffic in front of you, and over-the-air updates.
 
 Readings are announced over MQTT discovery, so the appliance shows up in Home
-Assistant as a device with its entities, without a line of YAML. Values are
-retained, so whatever connects next sees the current state instead of waiting
-for the machine to change its mind.
+Assistant as a device with its entities, without a line of YAML.
 
 The firmware is **strictly read-only**. It never transmits on the bus: there is
 no send path in the code at all, not even a disabled one. It registers only as a
@@ -371,12 +369,12 @@ Over MQTT, under a topic root that defaults to `bshdbus/<device-name>`:
 | Topic | Retained | Payload |
 | :--- | :---: | :--- |
 | `<base>/status` | ✔ | `online` / `offline`; also the last will, so a dead adapter corrects itself |
-| `<base>/state/<entity>` | ✔ | the value; an empty payload means the reading went stale |
+| `<base>/state/<entity>` | ✘ | the value; an empty payload means the reading went stale |
 | `<base>/frame` | ✘ | every frame as hex, when raw frames are switched on |
 
-Because the values are retained, whatever subscribes next sees the current state
-straight away rather than waiting for the appliance to do something, which on
-an idle machine can be hours.
+The values are not retained: an old reading left on the broker would be handed
+to the next subscriber as if it were current. Instead every value is published
+again whenever the adapter connects to the broker or Home Assistant restarts.
 
 With discovery enabled, the same readings are announced under
 `homeassistant/…`, and the appliance appears in Home Assistant as a device with

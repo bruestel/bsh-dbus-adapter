@@ -200,7 +200,7 @@ void publish_everything() {
   }
 
   for (const Reading &r : g_last)
-    pub(topic_state(r.id), r.available ? r.value : "", true);
+    pub(topic_state(r.id), r.available ? r.value : "", false);
 }
 
 void on_event(void *, esp_event_base_t, int32_t id, void *data) {
@@ -384,7 +384,7 @@ void publish(const Reading &r) {
 
   /* Inside the lock, not after it: the topic is built from g_base and the
      handle is read by pub(). */
-  pub(topic_state(r.id), r.available ? r.value : "", true);
+  pub(topic_state(r.id), r.available ? r.value : "", false);
 }
 
 void publish_raw_frame(const std::string &hex) {

@@ -2,11 +2,13 @@
    Publishing decoded appliance state to an MQTT broker.
 
    The web interface answers "what is the machine doing right now" for someone
-   looking at it. This answers the same question for something that is not:
-   readings are retained, so a broker restart or a newly started consumer sees
-   the current state immediately rather than waiting for the appliance to change
-   its mind -- which, on a dryer that reports the door as an event and little
-   else, could be hours.
+   looking at it. This answers the same question for something that is not.
+
+   Readings are not retained. A retained value outlives the adapter that wrote
+   it, and a consumer that connects later would be handed it as current with
+   nothing to say how old it is. Instead the whole set is republished whenever
+   the connection comes up or Home Assistant restarts, so a consumer that is
+   already subscribed is never left empty for long.
 
    One availability topic. "The adapter is gone" and "the appliance is
    unplugged" were separate for a while, until it became clear that MQTT allows
@@ -78,16 +80,14 @@ std::string status_json();
    discovery topic that is no longer wanted is cleared here, or Home Assistant
    would keep showing an entity nothing will ever update again.
 
-   The state topics are left alone. Their retained payload is a value that was
-   true when it was written, and clearing it would not make a subscriber better
-   informed than an old reading does. */
+   The state topics need no such care: they are not retained, so nothing of a
+   withdrawn reading stays behind on the broker. */
 void announce(const Description &device, const Reading *readings, size_t count);
 
 /* One frame exactly as it came off the bus, when the raw setting is on.
 
-   Not retained and at QoS 0, unlike everything else here: a frame is a moment,
-   not a state, and keeping the last one on the broker forever would say nothing
-   true about the appliance. Losing one under load costs a line in somebody's
+   Not retained, like the readings, and at QoS 0, unlike everything else here: a
+   frame is a moment, not a state. Losing one under load costs a line in somebody's
    recording, which is cheaper than making the bus task wait for an
    acknowledgement.
 
@@ -98,8 +98,8 @@ void announce(const Description &device, const Reading *readings, size_t count);
    again, and will still be able to when our reading turns out to be wrong. */
 void publish_raw_frame(const std::string &hex);
 
-/* One reading changed. Retained, so a consumer that connects later still sees
-   it; an unavailable reading publishes an empty payload. */
+/* One reading changed. Not retained; an unavailable reading publishes an empty
+   payload. */
 void publish(const Reading &r);
 
 /* Whether the appliance itself is talking, as distinct from whether this
