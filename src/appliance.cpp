@@ -395,13 +395,18 @@ std::vector<Stored> stored() {
     s.id = std::string(kCustomPrefix) + slug;
     s.slug = slug;
     const std::string json = appstore::load(slug);
-    auto res = parse_profile(json.c_str());
-    s.valid = res.ok;
-    if (res.ok) {
-      s.model = res.profile.meta.model.empty() ? slug : res.profile.meta.model;
-      s.product = res.profile.meta.product;
-      s.appliance = res.profile.meta.appliance;
-      s.entities = res.profile.entities.size();
+    /* Summarised, not parsed: a list needs names, not decoders. A full parse
+       of every stored profile on each request -- the JSON tree and then every
+       entity, near 90 KB for one profile with 40 of them -- is what aborted the
+       device whenever the interface opened with the monitor running. Everything
+       stored passed a full parse on the way in. */
+    const auto sum = summarize_profile(json.c_str());
+    s.valid = sum.ok;
+    if (sum.ok) {
+      s.model = sum.meta.model.empty() ? slug : sum.meta.model;
+      s.product = sum.meta.product;
+      s.appliance = sum.meta.appliance;
+      s.entities = sum.entities;
     } else {
       /* Listed anyway: a profile that no longer parses is exactly the one the
          user needs to find in order to fix or delete it. */

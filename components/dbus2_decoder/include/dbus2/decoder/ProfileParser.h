@@ -27,4 +27,23 @@ struct ParseResult {
 
 ParseResult parse_profile(const char *json);
 
+/* What a profile says about itself, without building it: the metadata and how
+   many entities it has.
+
+   For listing profiles, which used to parse every one in full only to show its
+   name -- building every entity of every stored profile on each request, and
+   with it the largest allocations this firmware makes. Not even the JSON tree
+   is built: the text is walked, and only the small "profile" object parsed.
+   `ok` means the file is
+   a readable schema-1 profile with an id and entities. It does not vouch for
+   the entities themselves; parse_profile() does that, and nothing is stored
+   that it has not accepted. */
+struct ProfileSummary {
+  bool ok = false;
+  Meta meta;
+  size_t entities = 0;
+};
+
+ProfileSummary summarize_profile(const char *json);
+
 }  // namespace dbus2::decoder

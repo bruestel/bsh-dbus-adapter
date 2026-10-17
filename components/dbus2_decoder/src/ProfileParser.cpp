@@ -474,4 +474,137 @@ ParseResult parse_profile(const char *json) {
   return res;
 }
 
+namespace {
+
+/* Walking JSON text without building it, for summarize_profile(). Each returns
+   the position just past what it skipped, or nullptr if the text ends first or
+   is not shaped the way JSON is. Strings are skipped escape-aware, so a brace
+   or quote inside a name cannot throw the nesting count off. */
+const char *skip_ws(const char *p) {
+  while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+    ++p;
+  return p;
+}
+
+const char *skip_string(const char *p) {
+  for (++p; *p; ++p) {
+    if (*p == '\\') {
+      if (!*++p)
+        return nullptr;
+    } else if (*p == '"') {
+      return p + 1;
+    }
+  }
+  return nullptr;
+}
+
+const char *skip_value(const char *p) {
+  p = skip_ws(p);
+  if (*p == '"')
+    return skip_string(p);
+  if (*p == '{' || *p == '[') {
+    int depth = 0;
+    while (*p) {
+      if (*p == '"') {
+        p = skip_string(p);
+        if (!p)
+          return nullptr;
+        continue;
+      }
+      if (*p == '{' || *p == '[') {
+        ++depth;
+      } else if (*p == '}' || *p == ']') {
+        if (--depth == 0)
+          return p + 1;
+      }
+      ++p;
+    }
+    return nullptr;
+  }
+  const char *start = p;
+  while (*p && *p != ',' && *p != '}' && *p != ']' && *p != ' ' && *p != '\t' &&
+         *p != '\n' && *p != '\r')
+    ++p;
+  return p == start ? nullptr : p;
+}
+
+/* The elements of the array starting at p, counted rather than parsed. */
+bool count_elements(const char *p, size_t *n) {
+  *n = 0;
+  p = skip_ws(p + 1);
+  if (*p == ']')
+    return true;
+  for (;;) {
+    p = skip_value(p);
+    if (!p)
+      return false;
+    ++*n;
+    p = skip_ws(p);
+    if (*p == ']')
+      return true;
+    if (*p != ',')
+      return false;
+    ++p;
+  }
+}
+
+}  // namespace
+
+/* Walks the top level of the file and builds nothing but the small "profile"
+   object. The tree cJSON makes of a whole profile runs to several times the
+   size of its text -- 89 KB for a 13 KB file with 40 entities -- and listing
+   stored profiles must not need that much: it is asked for whenever the
+   interface opens, typically with the monitor's 74 KB ring already taken. */
+ProfileSummary summarize_profile(const char *json) {
+  ProfileSummary s;
+  long schema = 0;
+
+  const char *p = skip_ws(json);
+  if (*p != '{')
+    return s;
+  p = skip_ws(p + 1);
+  while (*p != '}') {
+    if (*p != '"')
+      return s;
+    const char *key_end = skip_string(p);
+    if (!key_end)
+      return s;
+    const std::string key(p + 1, key_end - 1);
+    p = skip_ws(key_end);
+    if (*p != ':')
+      return s;
+    const char *value = skip_ws(p + 1);
+    const char *end = skip_value(value);
+    if (!end)
+      return s;
+
+    if (key == "schema") {
+      schema = std::strtol(value, nullptr, 10);
+    } else if (key == "profile" && *value == '{') {
+      cJSON *meta = cJSON_ParseWithLength(value, static_cast<size_t>(end - value));
+      if (meta) {
+        s.meta.id = str_or(meta, "id");
+        s.meta.manufacturer = str_or(meta, "manufacturer");
+        s.meta.model = str_or(meta, "model");
+        s.meta.product = str_or(meta, "product");
+        s.meta.appliance = str_or(meta, "appliance");
+        s.meta.source = str_or(meta, "source");
+        cJSON_Delete(meta);
+      }
+    } else if (key == "entities" && *value == '[') {
+      if (!count_elements(value, &s.entities))
+        return s;
+    }
+
+    p = skip_ws(end);
+    if (*p == ',')
+      p = skip_ws(p + 1);
+    else if (*p != '}')
+      return s;
+  }
+
+  s.ok = schema == 1 && !s.meta.id.empty() && s.entities > 0;
+  return s;
+}
+
 }  // namespace dbus2::decoder

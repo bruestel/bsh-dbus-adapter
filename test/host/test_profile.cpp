@@ -143,6 +143,42 @@ int main() {
     CHECK(!no_ents.ok, "empty entities rejected");
   }
 
+  section("A listing reads what a profile says about itself, without building it");
+  {
+    auto sum = summarize_profile(R"J({"schema":1,
+      "profile":{"id":"x","model":"WAY32841","product":"Bosch i-DOS","appliance":"washing_machine"},
+      "entities":[{"id":"a"},{"id":"b"},{"id":"c"}]})J");
+    CHECK(sum.ok, "a readable profile summarises");
+    CHECK(sum.meta.model == "WAY32841" && sum.meta.appliance == "washing_machine",
+          "model and appliance read, got \"%s\" / \"%s\"", sum.meta.model.c_str(),
+          sum.meta.appliance.c_str());
+    CHECK(sum.entities == 3, "entities counted, not parsed: 3, got %zu", sum.entities);
+
+    CHECK(!summarize_profile("{ not json").ok, "malformed JSON is not ok");
+    CHECK(!summarize_profile(R"J({"profile":{"id":"x"},"entities":[{}]})J").ok,
+          "missing schema is not ok");
+    CHECK(!summarize_profile(R"J({"schema":1,"profile":{"id":"x"},"entities":[]})J").ok,
+          "no entities is not ok");
+
+    /* Counted by nesting, so what sits inside a string must not count. */
+    auto tricky = summarize_profile(R"J({"schema":1,
+      "entities":[
+        {"id":"a","name":"has ] and } and [ inside","transforms":[{"op":"map","values":{"1":"x"}}]},
+        {"id":"b","name":"quote \" and backslash \\"},
+        {"id":"c","match":{"payload":[1,2,3]}}
+      ],
+      "profile":{"id":"x","model":"M \"quoted\""}})J");
+    CHECK(tricky.ok && tricky.entities == 3,
+          "brackets, quotes and escapes in strings do not miscount: 3, got %zu", tricky.entities);
+    CHECK(tricky.meta.model == "M \"quoted\"", "profile read wherever it sits, got \"%s\"",
+          tricky.meta.model.c_str());
+
+    CHECK(!summarize_profile(R"J({"schema":1,"profile":{"id":"x"},"entities":[{"id":"a"},)J").ok,
+          "a file cut off mid-way is not ok");
+    CHECK(!summarize_profile(R"J({"schema":1,"profile":{"id":"x"},"entities":[{"id":"a})J").ok,
+          "an unterminated string is not ok");
+  }
+
   section("A bad entity is reported with its own name");
   {
     const char *json = R"J({
