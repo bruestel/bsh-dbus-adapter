@@ -3,7 +3,7 @@
 .pioenvs/
 .piolibdeps/
 
-# ESP-IDF component manager: restored from dependencies.lock, which is tracked
+# ESP-IDF component manager: restored from dependencies.lock.<target>, which is tracked
 managed_components/
 
 # ESP-IDF: regenerated per environment from sdkconfig.defaults

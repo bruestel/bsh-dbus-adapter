@@ -10,8 +10,8 @@ people's code, under their licences. This file records what and whose, which is
 what those licences ask for in return.
 
 Nothing here is vendored into the repository. The components are fetched at
-build time by the IDF component manager, pinned by `dependencies.lock`, and the
-framework comes from the PlatformIO platform pinned in `platformio.ini`.
+build time by the IDF component manager, pinned by `dependencies.lock.<target>`,
+and the framework comes from the PlatformIO platform pinned in `platformio.ini`.
 
 ## What the images contain
 
