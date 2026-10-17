@@ -334,6 +334,12 @@ ParseResult parse_profile(const char *json) {
     return res;
   }
 
+  /* Reserved once rather than grown. An entity is 344 bytes on the target, so
+     growing past 32 entries asked for one 22 KB block -- with the old 11 KB
+     still held while it was copied -- and on a fragmented heap that is the
+     allocation that fails. Without exceptions a failed new is an abort. */
+  res.profile.entities.reserve(static_cast<size_t>(cJSON_GetArraySize(ents)));
+
   int idx = 0;
   const cJSON *je = nullptr;
   cJSON_ArrayForEach(je, ents) {

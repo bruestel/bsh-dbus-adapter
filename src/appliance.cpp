@@ -12,6 +12,7 @@
 #include "appstore/Store.h"
 #include "dbus2/decoder/ProfileParser.h"
 
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_timer.h>
 
@@ -111,6 +112,36 @@ bool load(const bsh_profile_t *p, std::string *error) {
   return true;
 }
 
+/* Whether there is memory enough to parse a profile of this size, refused with
+   a reason when there is not.
+
+   Parsing builds cJSON's tree of the whole file before a single entity exists,
+   and that tree runs to several times the text: saving a 13 KB profile with 40
+   entities took 74 KB on top of the text itself, measured on the device. With
+   the monitor's 74 KB ring taken, that was more than was left, and without
+   exceptions a failed allocation is an abort -- the device rebooted rather than
+   say no. Seven times the text plus a margin covers what was measured with
+   room to spare, and an honest refusal costs the user a restart instead. */
+bool room_to_parse(const std::string &json, std::string *error) {
+  const size_t need = json.size() * 7 + 16 * 1024;
+  const size_t have = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+  if (have >= need)
+    return true;
+  ESP_LOGW(TAG, "Not parsing a %u-byte profile: about %u bytes needed, %u free",
+           static_cast<unsigned>(json.size()), static_cast<unsigned>(need),
+           static_cast<unsigned>(have));
+  if (error) {
+    char buf[240];
+    std::snprintf(buf, sizeof(buf),
+                  "not enough memory to read this profile (about %u KB needed, %u KB free); "
+                  "close every open copy of this page and restart the adapter, which frees "
+                  "the live monitor's buffer",
+                  static_cast<unsigned>(need / 1024), static_cast<unsigned>(have / 1024));
+    *error = buf;
+  }
+  return false;
+}
+
 /* Reads, validates and activates the stored profile. Validation happens before
    anything is replaced, so a broken profile leaves the running one alone
    instead of taking the appliance down with it. */
@@ -121,6 +152,8 @@ bool load_custom(const std::string &id, std::string *error) {
       *error = "no such profile is stored on this device";
     return false;
   }
+  if (!room_to_parse(json, error))
+    return false;
 
   auto res = parse_profile(json.c_str());
   if (!res.ok) {
@@ -426,6 +459,8 @@ std::vector<Stored> stored() {
 bool save_custom(const std::string &id, const std::string &json, bool activate_it,
                  std::string *error) {
   Guard g;
+  if (!room_to_parse(json, error))
+    return false;
   auto res = parse_profile(json.c_str());
   if (!res.ok) {
     if (error)
