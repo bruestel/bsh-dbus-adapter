@@ -211,9 +211,10 @@ the way back into a BaSHi is a cable.
 A profile is a JSON file that says what the frames on one model mean: which
 address carries the remaining time, which byte holds the door, what programme
 code 35 is called. It is data, not code, and it loads at runtime, so a new one
-is a file rather than a firmware build. Twenty-three ship with the firmware:
+is a file rather than a firmware build. Twenty-four ship with the firmware:
 twenty-two converted from the ESPHome configurations the community wrote over
-the years, and one written in the editor described below. The models covered
+the years, one written in the editor described below, and one contributed from
+bus logs of the machine it describes. The models covered
 are listed in [`profiles/`](profiles/): washing machines, dryers, dishwashers,
 an oven, a fridge and a steamer.
 
