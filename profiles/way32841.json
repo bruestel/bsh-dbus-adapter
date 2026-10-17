@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "extends": "base/washing-machine",
   "profile": {
     "id": "way32841",
     "model": "WAY32841",
@@ -20,17 +21,9 @@
   "entities": [
     {
       "id": "program",
+      "from": "program",
       "name": "Programme",
       "kind": "text_sensor",
-      "match": {
-        "dest": "0x11",
-        "cmd": "0x1006",
-        "min_len": 1
-      },
-      "extract": {
-        "op": "u8",
-        "at": 0
-      },
       "transforms": [
         {
           "op": "map",
@@ -64,17 +57,9 @@
     },
     {
       "id": "program_phase",
+      "from": "program_phase",
       "name": "Programme phase",
       "kind": "text_sensor",
-      "match": {
-        "dest": "0x21",
-        "cmd": "0x1003",
-        "min_len": 1
-      },
-      "extract": {
-        "op": "u8",
-        "at": 0
-      },
       "transforms": [
         {
           "op": "map",
@@ -110,23 +95,9 @@
     },
     {
       "id": "remain",
+      "from": "remain",
       "name": "Time remaining",
       "kind": "sensor",
-      "match": {
-        "dest": "0x21",
-        "cmd": "0x1002",
-        "min_len": 2
-      },
-      "extract": {
-        "op": "u16be",
-        "at": 0
-      },
-      "ha": {
-        "device_class": "duration",
-        "unit_of_measurement": "min",
-        "state_class": "measurement",
-        "accuracy_decimals": 0
-      },
       "transforms": [
         {
           "op": "divide",
@@ -147,16 +118,8 @@
     },
     {
       "id": "state",
+      "from": "state_2",
       "name": "Status",
-      "match": {
-        "dest": "0x21",
-        "cmd": "0x1000",
-        "min_len": 1
-      },
-      "extract": {
-        "op": "u8",
-        "at": 0
-      },
       "kind": "text_sensor",
       "transforms": [
         {
@@ -299,36 +262,18 @@
     },
     {
       "id": "feat_waterplus",
+      "from": "feat_waterplus_4",
       "name": "Water plus",
       "kind": "binary_sensor",
-      "match": {
-        "dest": "0x11",
-        "cmd": "0x1006",
-        "min_len": 6
-      },
-      "extract": {
-        "op": "mask",
-        "at": 5,
-        "mask": 2
-      },
       "ha": {
         "icon": "mdi:water-plus"
       }
     },
     {
       "id": "feat_prewash",
+      "from": "feat_prewash",
       "name": "Pre-wash",
       "kind": "binary_sensor",
-      "match": {
-        "dest": "0x11",
-        "cmd": "0x1006",
-        "min_len": 6
-      },
-      "extract": {
-        "op": "mask",
-        "at": 5,
-        "mask": 128
-      },
       "ha": {
         "icon": "mdi:rotate-orbit"
       }
