@@ -24,7 +24,9 @@ import collections
 import copy
 import json
 import pathlib
+import shutil
 import sys
+import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import profile_lib as lib  # noqa: E402
@@ -94,6 +96,25 @@ def canonical_name(ids) -> str:
     return counts.most_common(1)[0][0]
 
 
+def verify(rewritten: dict, flat: dict, root: pathlib.Path) -> int:
+    """How many factored profiles fail to resolve back to their flat original."""
+    failures = 0
+    for path, out in rewritten.items():
+        resolved = lib.resolve(out, root)
+        if lib.canonical(resolved) != lib.canonical(flat[path]):
+            failures += 1
+            print(f"  MISMATCH {path.name}: resolving the factored form does not "
+                  f"reproduce the original")
+            a = {e["id"]: e for e in flat[path]["entities"]}
+            b = {e["id"]: e for e in resolved["entities"]}
+            for k in sorted(set(a) | set(b)):
+                if a.get(k) != b.get(k):
+                    print(f"      {k}:")
+                    print(f"        was: {json.dumps(a.get(k), sort_keys=True, ensure_ascii=False)[:160]}")
+                    print(f"        now: {json.dumps(b.get(k), sort_keys=True, ensure_ascii=False)[:160]}")
+    return failures
+
+
 def factor(root: pathlib.Path, write: bool) -> int:
     flat = {}
     for path in sorted(root.glob("*.json")):
@@ -115,11 +136,22 @@ def factor(root: pathlib.Path, write: bool) -> int:
     for path, doc in flat.items():
         by_kind[doc["profile"].get("appliance", "unknown")].append(path)
 
+    # Bases already on disk are left alone. They are built from every model
+    # that extends them, and a base rebuilt here would be built from only the
+    # handful still flat -- written over the real one, it would quietly change
+    # every profile that extends it, none of which this run verifies.
+    existing = {f"{lib.BASE_DIR}/{p.stem}" for p in (root / lib.BASE_DIR).glob("*.json")}
+
     bases = {}
     rewritten = {}
 
     for kind, paths in sorted(by_kind.items()):
         if len(paths) < MIN_MODELS:
+            continue
+        base_id = f"{lib.BASE_DIR}/{kind.replace('_', '-')}"
+        if base_id in existing:
+            print(f"  {kind}: {base_id} already exists, leaving "
+                  f"{', '.join(p.name for p in paths)} as they are")
             continue
 
         seen = collections.defaultdict(list)  # shape -> [(path, entity)]
@@ -165,7 +197,6 @@ def factor(root: pathlib.Path, write: bool) -> int:
                 entry["ha"] = ha
             base_entities.append(entry)
 
-        base_id = f"{lib.BASE_DIR}/{kind.replace('_', '-')}"
         bases[base_id] = {
             "schema": 1,
             "profile": {"id": base_id.split("/")[-1],
@@ -228,6 +259,10 @@ def factor(root: pathlib.Path, write: bool) -> int:
                  if len({kind for kind, _ in v}) >= 2}
         if not hoist:
             continue
+        fam_id = f"{lib.BASE_DIR}/{fam}"
+        if fam_id in existing:
+            print(f"  {fam}: {fam_id} already exists, not rebuilding it")
+            continue
 
         entities = []
         for k, items in sorted(hoist.items()):
@@ -242,7 +277,6 @@ def factor(root: pathlib.Path, write: bool) -> int:
                     entry[key] = copy.deepcopy(proto[key])
             entities.append(entry)
 
-        fam_id = f"{lib.BASE_DIR}/{fam}"
         family_bases[fam_id] = {
             "schema": 1,
             "profile": {"id": fam, "model": f"Generic {fam.replace('-', ' ')} appliance",
@@ -276,40 +310,32 @@ def factor(root: pathlib.Path, write: bool) -> int:
     bases.update(family_bases)
 
     # ---- the safety net --------------------------------------------------
-    (root / lib.BASE_DIR).mkdir(exist_ok=True)
-    tmp_written = []
-    for base_id, doc in bases.items():
-        p = root / f"{base_id}.json"
-        p.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        tmp_written.append(p)
-
-    failures = 0
-    for path, out in rewritten.items():
-        resolved = lib.resolve(out, root)
-        if lib.canonical(resolved) != lib.canonical(flat[path]):
-            failures += 1
-            print(f"  MISMATCH {path.name}: resolving the factored form does not "
-                  f"reproduce the original")
-            a = {e["id"]: e for e in flat[path]["entities"]}
-            b = {e["id"]: e for e in resolved["entities"]}
-            for k in sorted(set(a) | set(b)):
-                if a.get(k) != b.get(k):
-                    print(f"      {k}:")
-                    print(f"        was: {json.dumps(a.get(k), sort_keys=True, ensure_ascii=False)[:160]}")
-                    print(f"        now: {json.dumps(b.get(k), sort_keys=True, ensure_ascii=False)[:160]}")
+    # Verified in a copy, never in the tree itself: the new bases have to exist
+    # as files for the factored profiles to resolve against, and writing them
+    # into the real tree for a check -- then deleting them again -- is how a
+    # check once removed a base that was there before it ran.
+    with tempfile.TemporaryDirectory() as tmp:
+        scratch = pathlib.Path(tmp) / "profiles"
+        shutil.copytree(root, scratch)
+        (scratch / lib.BASE_DIR).mkdir(exist_ok=True)
+        for base_id, doc in bases.items():
+            (scratch / f"{base_id}.json").write_text(
+                json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        failures = verify(rewritten, flat, scratch)
 
     if failures:
-        for p in tmp_written:
-            p.unlink(missing_ok=True)
         print(f"\n  {failures} profiles would change meaning -- nothing written")
         return 1
 
     if not write:
-        for p in tmp_written:
-            p.unlink(missing_ok=True)
         print(f"  check only: {len(rewritten)} profiles would be factored against "
               f"{len(bases)} bases, all verified identical")
         return 0
+
+    (root / lib.BASE_DIR).mkdir(exist_ok=True)
+    for base_id, doc in bases.items():
+        (root / f"{base_id}.json").write_text(
+            json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     saved = 0
     for path, out in rewritten.items():
