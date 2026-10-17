@@ -70,6 +70,25 @@ struct Guard {
   Guard &operator=(const Guard &) = delete;
 };
 
+/* Starting and stopping the client, which two tasks do: the network event task
+   when the station comes and goes, and the task that applies saved settings.
+   Overlapping, they would each build a client -- one of them never destroyed,
+   and still pointing at a g_ca_cert the other had replaced.
+
+   Separate from data_lock() because it is held across esp_mqtt_client_stop().
+   That is safe here and nowhere else: the MQTT task never takes this one. */
+SemaphoreHandle_t lifecycle_lock() {
+  static SemaphoreHandle_t h = xSemaphoreCreateMutex();
+  return h;
+}
+
+struct LifecycleGuard {
+  LifecycleGuard() { xSemaphoreTake(lifecycle_lock(), portMAX_DELAY); }
+  ~LifecycleGuard() { xSemaphoreGive(lifecycle_lock()); }
+  LifecycleGuard(const LifecycleGuard &) = delete;
+  LifecycleGuard &operator=(const LifecycleGuard &) = delete;
+};
+
 std::string topic_status() { return g_base + "/status"; }
 
 /* One state, not two. "The adapter is gone" and "the appliance is unplugged"
@@ -276,7 +295,12 @@ void stop() {
   esp_mqtt_client_destroy(client);
 }
 
+/* stop() and start() are called with the lifecycle lock held. */
 bool start() {
+  /* Whatever ran before goes first, so there is never a second client, and
+     g_ca_cert is only replaced once nothing points at it any more. */
+  stop();
+
   const appcfg::Mqtt cfg = appcfg::mqtt();
   if (!cfg.enabled || !cfg.configured() || !g_have_network)
     return false;
@@ -360,6 +384,7 @@ bool begin() {
 }
 
 void on_network(bool connected) {
+  LifecycleGuard l;
   g_have_network = connected;
   if (connected)
     start();
@@ -371,7 +396,7 @@ bool connected() { return g_connected; }
 bool enabled() { return appcfg::mqtt().enabled; }
 
 void reconfigure() {
-  stop();
+  LifecycleGuard l;
   start();
 }
 
