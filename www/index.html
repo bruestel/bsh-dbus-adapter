@@ -462,6 +462,10 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
         <span class="swtext">Hidden frames<small>frames the profile marks as hidden</small></span>
       </label>
       <label class="swrow">
+        <span class="sw"><input type="checkbox" id="f-rep" checked><span></span></span>
+        <span class="swtext">Repeated frames<small>a frame identical to the one right before it</small></span>
+      </label>
+      <label class="swrow">
         <span class="sw"><input type="checkbox" id="f-cols"><span></span></span>
         <span class="swtext">Length &amp; checksum<small>the structural columns</small></span>
       </label>
@@ -1568,6 +1572,15 @@ function crc16(bytes){
    since the identical one -- that is how a cyclic keepalive gives itself away. */
 const lastSeen = new Map();
 
+/* The frame drawn just before this one, whole, so a repeat can be told apart
+   from a change. Some appliances send the same frame tens of times a second,
+   and between two such rows the one that differs is what a reader is after.
+   Strictly the previous frame on the wire, not the previous one of the same
+   command: hiding only what is identical to its neighbour leaves every
+   interleaving in view. Forgotten across a gap, where frames went missing and
+   the neighbour is no longer known. */
+let prevFrame = null;
+
 /* The device stamps frames with its own uptime in milliseconds, which is what
    keeps the spacing between them exact. Turning that into a wall clock is the
    browser's job: it already knows the date, and a frame reaches it within
@@ -1606,7 +1619,7 @@ const lastPayload = {};
    the active profile carries a "hidden" marker for it -- optionally down to a
    specific payload. There is no automatic heartbeat detection any more: what the
    profile does not mark is always shown. */
-const filters = { dest: '', cmd: '', pay: '', hideHidden: true };
+const filters = { dest: '', cmd: '', pay: '', hideHidden: true, hideRepeats: false };
 let shownCount = 0, hiddenCount = 0;
 
 /* Frame keys seen on the wire, so the reference tables can bold the nibbles this
@@ -1827,6 +1840,9 @@ function buildFrame(m){
      row was drawn and the frame is no longer marked hidden. */
   item.dataset.summary = summary;
   item.dataset.hidden = hidden ? '1' : '';
+  const wire = `${m.l} ${m.d} ${m.x}`;
+  item.dataset.repeat = wire === prevFrame ? '1' : '';
+  prevFrame = wire;
   const row  = document.createElement('div');
   row.className = 'fr fgrid' + (hidden ? ' hb' : '');
   row.innerHTML =
@@ -1968,6 +1984,7 @@ function renderReference(){
 function frameMatches(el){
   const d = el.dataset;
   if(filters.hideHidden && d.hidden) return false;
+  if(filters.hideRepeats && d.repeat) return false;
   if(filters.dest && !d.dest.toUpperCase().includes(filters.dest)) return false;
   if(filters.cmd  && !d.cmd.toUpperCase().includes(filters.cmd)) return false;
   /* Spaces are stripped from both sides, so "0C00" finds a payload printed as
@@ -2024,6 +2041,7 @@ for(const [id, key] of [['f-dest','dest'], ['f-cmd','cmd'], ['f-pay','pay']]){
 /* The heading reads "Show", so the switch shows rather than hides -- a toggle
    whose label is a negation makes the reader translate before deciding. */
 $('f-hb').onchange = ev => { filters.hideHidden = !ev.target.checked; applyFilters(); };
+$('f-rep').onchange = ev => { filters.hideRepeats = !ev.target.checked; applyFilters(); };
 $('f-cols').onchange = ev => { $('mon').classList.toggle('compact', !ev.target.checked); };
 
 function connectWs(){
@@ -2061,6 +2079,7 @@ function connectWs(){
     let div;
     if(m.t === 'drop' || m.t === 'gap'){
       dropped += (m.n || 0);
+      prevFrame = null;
       div = document.createElement('div');
       div.className = 'drop';
       div.textContent = m.t === 'gap'
