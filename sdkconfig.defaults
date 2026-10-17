@@ -77,3 +77,10 @@ CONFIG_ESP_TASK_WDT_TIMEOUT_S=15
 # whole point behind an appliance.
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_PANIC=y
+
+# --- MQTT ---------------------------------------------------------------------
+# The "do not check" setting connects over TLS without verifying the broker.
+# ESP-IDF refuses that unless it is allowed here; with a CA certificate the
+# broker is still checked as before.
+CONFIG_ESP_TLS_INSECURE=y
+CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y

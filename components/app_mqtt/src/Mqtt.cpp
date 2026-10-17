@@ -37,6 +37,13 @@ std::vector<Reading> g_last;
 Description g_device;
 bool g_appliance_online = false;
 
+/* esp-mqtt keeps a pointer to the CA certificate rather than a copy, and parses
+   it on every connect. It has to outlive the client: a local in start() would
+   leave mbedTLS reading freed memory, and every own-CA connection would fail.
+   Replaced only by start(), after stop() has destroyed the client that pointed
+   at it. */
+std::string g_ca_cert;
+
 /* Every discovery topic currently announced. Kept so the next announcement can
    clear the ones it no longer needs -- Home Assistant treats a retained
    discovery message as permanent, so an entity that vanishes from the profile
@@ -282,8 +289,9 @@ bool start() {
     g_raw_frames = cfg.raw_frames;
   }
 
-  /* Held by name for as long as the config struct: esp-mqtt copies these on
-     init, but only while the pointers are still good. */
+  /* Held by name for as long as the config struct: esp-mqtt copies the strings
+     on init, but only while the pointers are still good. The CA certificate it
+     does not copy at all (see g_ca_cert). */
   const std::string uri = cfg.uri();
   const std::string client_id = appcfg::mqtt_client_id();
 
@@ -298,10 +306,13 @@ bool start() {
   /* With a certificate the server is checked against it; without one esp-tls
      verifies nothing at all, which is exactly what the insecure setting asks
      for -- and why the two are a single choice in the interface rather than two
-     switches that can contradict each other. */
+     switches that can contradict each other. That last part only holds because
+     sdkconfig.defaults allows it: ESP-IDF otherwise refuses a TLS connection
+     that has been given nothing to verify against. */
   if (cfg.tls && !cfg.tls_insecure && !cfg.ca_cert.empty()) {
-    c.broker.verification.certificate = cfg.ca_cert.c_str();
-    c.broker.verification.certificate_len = cfg.ca_cert.size() + 1;  // counted with its terminator
+    g_ca_cert = cfg.ca_cert;
+    c.broker.verification.certificate = g_ca_cert.c_str();
+    c.broker.verification.certificate_len = g_ca_cert.size() + 1;  // counted with its terminator
   }
 
   /* The will is the only thing that speaks for a device that has stopped
