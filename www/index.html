@@ -2008,6 +2008,18 @@ function filterFrame(el){
   return ok;
 }
 
+/* Rows that fall off the bottom take their place as a neighbour with them. The
+   oldest frame left is then a repeat of nothing on screen, like one after a
+   gap -- were it kept hidden, a frame sent over and over would empty the log
+   once its first copy scrolled away. */
+function revealOldest(log){
+  for(let el = log.lastElementChild; el; el = el.previousElementSibling){
+    if(el.classList.contains('drop')) return;
+    if(!el.dataset.ts) continue;
+    if(frameMatches(el)){ el.classList.remove('filtered'); return; }
+  }
+}
+
 function applyFilters(){
   /* The log is newest first; walked from the bottom so each frame meets its
      predecessor first. Frame rows carry a timestamp; the drop and gap markers
@@ -2114,7 +2126,10 @@ function connectWs(){
     const atTop = log.scrollTop < 8;
     log.prepend(div);
     if(!atTop) log.scrollTop += div.offsetHeight;
-    while(log.childElementCount > 600) log.removeChild(log.lastChild);
+    if(log.childElementCount > 600){
+      while(log.childElementCount > 600) log.removeChild(log.lastChild);
+      revealOldest(log);
+    }
   };
   ws.onclose = () => setTimeout(connectWs, 2000);
 }
