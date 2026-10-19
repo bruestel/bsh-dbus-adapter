@@ -463,7 +463,7 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
       </label>
       <label class="swrow">
         <span class="sw"><input type="checkbox" id="f-rep" checked><span></span></span>
-        <span class="swtext">Repeated frames<small>a frame identical to the one right before it</small></span>
+        <span class="swtext">Repeated frames<small>a frame identical to the one shown before it</small></span>
       </label>
       <label class="swrow">
         <span class="sw"><input type="checkbox" id="f-cols"><span></span></span>
@@ -1572,14 +1572,16 @@ function crc16(bytes){
    since the identical one -- that is how a cyclic keepalive gives itself away. */
 const lastSeen = new Map();
 
-/* The frame drawn just before this one, whole, so a repeat can be told apart
-   from a change. Some appliances send the same frame tens of times a second,
-   and between two such rows the one that differs is what a reader is after.
-   Strictly the previous frame on the wire, not the previous one of the same
-   command: hiding only what is identical to its neighbour leaves every
-   interleaving in view. Forgotten across a gap, where frames went missing and
-   the neighbour is no longer known. */
-let prevFrame = null;
+/* The newest frame the other filters let through, whole, so a repeat can be
+   told apart from a change. Some appliances send the same frame tens of times
+   a second, and between two such rows the one that differs is what a reader is
+   after. The neighbour is the previous frame that would be on screen, not the
+   previous one on the wire: two nodes that take turns never repeat on the wire,
+   yet narrowed to one of them they do. Still not the previous one of the same
+   command, so whatever interleaving the filters leave stays in view. Forgotten
+   across a gap, where frames went missing and the neighbour is no longer
+   known. */
+let prevShown = null;
 
 /* The device stamps frames with its own uptime in milliseconds, which is what
    keeps the spacing between them exact. Turning that into a wall clock is the
@@ -1840,9 +1842,7 @@ function buildFrame(m){
      row was drawn and the frame is no longer marked hidden. */
   item.dataset.summary = summary;
   item.dataset.hidden = hidden ? '1' : '';
-  const wire = `${m.l} ${m.d} ${m.x}`;
-  item.dataset.repeat = wire === prevFrame ? '1' : '';
-  prevFrame = wire;
+  item.dataset.wire = `${m.l} ${m.d} ${m.x}`;
   const row  = document.createElement('div');
   row.className = 'fr fgrid' + (hidden ? ' hb' : '');
   row.innerHTML =
@@ -1984,7 +1984,6 @@ function renderReference(){
 function frameMatches(el){
   const d = el.dataset;
   if(filters.hideHidden && d.hidden) return false;
-  if(filters.hideRepeats && d.repeat) return false;
   if(filters.dest && !d.dest.toUpperCase().includes(filters.dest)) return false;
   if(filters.cmd  && !d.cmd.toUpperCase().includes(filters.cmd)) return false;
   /* Spaces are stripped from both sides, so "0C00" finds a payload printed as
@@ -1996,12 +1995,29 @@ function frameMatches(el){
   return true;
 }
 
+/* Applies every filter to one frame row. Called oldest first, since whether a
+   frame is a repeat depends on the frame shown before it. */
+function filterFrame(el){
+  let ok = frameMatches(el);
+  if(ok){
+    const repeat = el.dataset.wire === prevShown;
+    prevShown = el.dataset.wire;
+    if(filters.hideRepeats && repeat) ok = false;
+  }
+  el.classList.toggle('filtered', !ok);
+  return ok;
+}
+
 function applyFilters(){
-  /* Frame rows carry a timestamp; the drop and gap markers do not, which is
-     what keeps them out of the filtering. */
-  const rows = $('log').querySelectorAll('[data-ts]');
+  /* The log is newest first; walked from the bottom so each frame meets its
+     predecessor first. Frame rows carry a timestamp; the drop and gap markers
+     do not, and only reset the neighbour. */
+  const all = [...$('log').children].reverse();
   shownCount = 0; hiddenCount = 0;
-  for(const el of rows){
+  prevShown = null;
+  for(const el of all){
+    if(el.classList.contains('drop')){ prevShown = null; continue; }
+    if(!el.dataset.ts) continue;
     const d = el.dataset;
     /* Re-evaluate against the current profile: a profile that loaded or changed
        after this row was drawn should mark or unmark it without a redraw. */
@@ -2028,9 +2044,7 @@ function applyFilters(){
         if(txt) txt.textContent = nowHidden ? '' : (d.summary || '');
       }
     }
-    const ok = frameMatches(el);
-    el.classList.toggle('filtered', !ok);
-    ok ? shownCount++ : hiddenCount++;
+    filterFrame(el) ? shownCount++ : hiddenCount++;
   }
   $('fcount').textContent = hiddenCount ? `${shownCount} shown, ${hiddenCount} hidden` : '';
 }
@@ -2079,7 +2093,7 @@ function connectWs(){
     let div;
     if(m.t === 'drop' || m.t === 'gap'){
       dropped += (m.n || 0);
-      prevFrame = null;
+      prevShown = null;
       div = document.createElement('div');
       div.className = 'drop';
       div.textContent = m.t === 'gap'
@@ -2095,7 +2109,7 @@ function connectWs(){
        has scrolled into the history would have the text slide away under them.
        Compensating by the height just inserted holds it still; at the very top
        there is nothing to preserve and the frame simply appears. */
-    if(m.t !== 'drop' && m.t !== 'gap' && !frameMatches(div)) div.classList.add('filtered');
+    if(m.t !== 'drop' && m.t !== 'gap') filterFrame(div);
 
     const atTop = log.scrollTop < 8;
     log.prepend(div);
