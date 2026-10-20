@@ -83,6 +83,11 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
      border-radius:0 0 .55rem .55rem;padding:.35rem}
 #log .drop{color:var(--warn);padding:.1rem .35rem}
 #log .empty{color:var(--dim);padding:.3rem .35rem}
+#log .day{color:var(--dim);padding:.3rem .35rem .1rem;font-weight:600}
+/* The log holds the reader's place itself when rows come and go above them.
+   Chrome's scroll anchoring would do the same on top, moving the view twice,
+   and other browsers do not do it at all -- so one mechanism, everywhere. */
+#log{overflow-anchor:none}
 
 /* Filters sit above the log rather than inside it: they change what the log is,
    so they belong where they can be seen without scrolling to find them. */
@@ -454,7 +459,8 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
   <section class="card">
     <h2>Live monitor</h2>
     <p class="sub">Every D-Bus frame on the wire, newest first. This device only listens —
-      it never transmits.</p>
+      it never transmits. This browser records what arrives and keeps it for three days, so
+      the filters search all of it, not just what is on screen.</p>
     <div class="swgroup">
       <h3>Show</h3>
       <label class="swrow">
@@ -514,13 +520,16 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
     </details>
 
     <div class="row">
-      <span class="dlabel">Download this capture as</span>
+      <span class="dlabel">Download the recording as</span>
       <button class="btn ghost" id="download"
               title="Plain text in the notation of bsh-dbus-logger.pl from the upstream project github.com/hn/bsh-home-appliances, so the capture reads and diffs beside its logs">TXT</button>
       <button class="btn ghost" id="download-csv"
               title="One row per frame with the bytes split into what they mean, including what this profile makes of them">CSV</button>
+      <button class="btn ghost danger" id="rec-clear"
+              title="Remove every frame this browser has recorded from this adapter">Delete recording</button>
       <span class="msg" id="logmsg" style="margin:0 0 0 auto"></span>
     </div>
+    <p class="sub" id="recinfo" style="margin:.5rem 0 0"></p>
   </section>
 
   <section class="card">
@@ -1086,7 +1095,7 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
 
 <script>
 const $ = id => document.getElementById(id);
-let lines = [], dropped = 0, info = null;
+let dropped = 0, info = null;
 /* Highest message sequence the monitor has shown, kept across reconnects so the
    socket can ask the ring only for what it missed. seenSeq guards against
    showing a message twice when a live frame and its replayed copy overlap. */
@@ -1285,6 +1294,10 @@ async function refreshAppliance(){
        meaning beside the bytes. Refreshed with the readings, which is what
        keeps the values shown against each byte current. */
     layout = lay || {};
+    /* Whether the profile hides a frame is asked when its row is drawn, so a
+       profile that loaded or changed means drawing the monitor again. */
+    const sig = JSON.stringify(layout);
+    if(sig !== layoutSig){ layoutSig = sig; scheduleRebuild(); }
     readingById = {};
     for(const r of rd) readingById[r.id] = r;
 
@@ -1572,8 +1585,8 @@ function crc16(bytes){
    since the identical one -- that is how a cyclic keepalive gives itself away. */
 const lastSeen = new Map();
 
-/* The newest frame the other filters let through, whole, so a repeat can be
-   told apart from a change. Some appliances send the same frame tens of times
+/* The newest frame the other filters let through, as wireOf() spells it, so a
+   repeat can be told apart from a change. Some appliances send the same frame tens of times
    a second, and between two such rows the one that differs is what a reader is
    after. The neighbour is the previous frame that would be on screen, not the
    previous one on the wire: two nodes that take turns never repeat on the wire,
@@ -1608,7 +1621,7 @@ let deviceBootEpoch = null;
 /* dest.cmd -> [{id,name,kind,op,byte,width}] from the active profile, and the
    latest value per entity id. Empty until a profile is loaded, which is exactly
    when there is nothing to interpret anyway. */
-let layout = {}, readingById = {};
+let layout = {}, readingById = {}, layoutSig = '{}';
 
 /* Declared here rather than beside the editor because show() touches `draft`
    while the script is still being evaluated -- opening the page straight on
@@ -1622,7 +1635,6 @@ const lastPayload = {};
    specific payload. There is no automatic heartbeat detection any more: what the
    profile does not mark is always shown. */
 const filters = { dest: '', cmd: '', pay: '', hideHidden: true, hideRepeats: false };
-let shownCount = 0, hiddenCount = 0;
 
 /* Frame keys seen on the wire, so the reference tables can bold the nibbles this
    machine actually uses. Just the identities -- no payload bookkeeping. */
@@ -1785,69 +1797,321 @@ function csvText(recs){
   return rows.join('\n') + '\n';
 }
 
-function buildFrame(m){
-  const bytes = (m.x.match(/../g) || []).map(h => parseInt(h, 16));
-  const dest  = parseInt(m.d, 16);
-  /* The device caps how many bytes it forwards, so a long frame arrives
-     shortened -- in which case the checksum cannot honestly be recomputed. */
-  const whole = bytes.length === m.l;
-  const cmd   = bytes.length >= 2 ? (bytes[0] << 8 | bytes[1]) : null;
-  const pay   = bytes.slice(2);
-  const crc   = whole ? crc16([m.l, dest, ...bytes]) : null;
+/* ---------------- recording ----------------
+   Every frame the monitor receives is also kept in this browser, in IndexedDB,
+   for three days. The adapter's own ring holds 512 messages and exists only to
+   bridge a reconnect -- a busy bus fills it in seconds, and it has no room to
+   grow. A recording that survives a reload, and filters that reach further back
+   than the rows on screen, can only live on this side. Nothing goes back to
+   the device.
 
-  const when = wallClock(m.ts);
+   A record is the frame as it came off the wire plus what cannot be worked out
+   again later: when it arrived, what the profile made of it at the time, how
+   long since the same frame, and the acknowledgement once that follows. Whether
+   the profile hides it is not stored -- that is the profile's current opinion,
+   and is asked again whenever a row is drawn or exported. */
+const KEEP_MS = 3 * 24 * 3600 * 1000;
+const SHOW_MAX = 600;
+let db = null;
+
+/* Only used when IndexedDB will not open, as in some private windows. The
+   monitor then works from memory and forgets on reload, which is how it always
+   worked before. */
+const memRecs = [], memHeld = new WeakSet();
+const MEM_MAX = 100000;
+
+/* Records waiting for the next write, which bundles a second's worth into one
+   transaction rather than paying for one per frame. Keyed like the store, so an
+   acknowledgement that lands first just amends the queued record. */
+const pending = new Map();
+
+/* This boot's records by uptime stamp, for the acknowledgements that follow
+   them. Bounded: an acknowledgement arrives within milliseconds or not at all. */
+const recentByTs = new Map();
+
+/* Uptime starts again at zero after every restart, so a frame is identified by
+   the boot it belongs to and its stamp within that boot. The pair is the
+   store's key, which is what makes writing a frame twice harmless: the replay
+   after a reload, or a second tab recording alongside this one, lands on the
+   record already there.
+
+   The boot is the wall-clock time the device started. With NTP the device
+   reports it exactly; without, it is worked out from the uptime to within a
+   second or so, and snapped to a boot already recorded close by, so that this
+   tab before and after a reload agrees with itself. */
+let boot = null, lastStoredBoot = null, lastFrameTs = -1;
+
+/* Stamp of the newest frame of this boot already recorded when the page
+   opened. The replay that follows a reload repeats those, and they are on
+   screen from the recording already. */
+let resumeTs = -1;
+
+function settleBoot(est){
+  if(lastStoredBoot !== null && Math.abs(lastStoredBoot - est) < 30000) return lastStoredBoot;
+  return Math.round(est / 1000) * 1000;
+}
+
+const idbReq = r => new Promise((ok, fail) => {
+  r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error);
+});
+const idbDone = tx => new Promise((ok, fail) => {
+  tx.oncomplete = () => ok(); tx.onerror = () => fail(tx.error); tx.onabort = () => fail(tx.error);
+});
+
+function openRecording(){
+  return new Promise(resolve => {
+    let req;
+    try{ req = indexedDB.open('bsh-monitor', 1); }catch(e){ resolve(null); return; }
+    /* The indexes are the questions the filters ask: one target, one command,
+       or both -- each ordered by time, so the newest matches come first and a
+       search can stop once the screen is full. A payload filter matches
+       anywhere in the bytes, which no index answers; it walks the time index. */
+    req.onupgradeneeded = () => {
+      const s = req.result.createObjectStore('frames', {keyPath: ['boot', 'ts']});
+      s.createIndex('at', 'at');
+      s.createIndex('dest', ['d', 'at']);
+      s.createIndex('cmd', ['c', 'at']);
+      s.createIndex('frame', ['d', 'c', 'at']);
+    };
+    req.onsuccess = () => {
+      const d = req.result;
+      /* A newer copy of this page wants a different layout; stepping aside
+         beats blocking it. */
+      d.onversionchange = () => { d.close(); db = null; };
+      resolve(d);
+    };
+    req.onerror = () => resolve(null);
+    req.onblocked = () => resolve(null);
+  });
+}
+
+function record(r){
+  if(db){ pending.set(r.boot + ':' + r.ts, r); return; }
+  /* An acknowledgement amends the object in place, so memory needs no write. */
+  if(memHeld.has(r)) return;
+  memHeld.add(r);
+  memRecs.push(r);
+  if(memRecs.length > MEM_MAX) memRecs.shift();
+}
+
+async function flushRecording(){
+  if(!db || !pending.size) return;
+  const batch = [...pending.values()];
+  pending.clear();
+  try{
+    const tx = db.transaction('frames', 'readwrite');
+    const s = tx.objectStore('frames');
+    for(const r of batch) s.put(r);
+    await idbDone(tx);
+    lastStoredBoot = batch[batch.length - 1].boot;
+  }catch(e){
+    /* Out of room: give up the oldest fifth and write again next time, rather
+       than stop recording the frames somebody is watching now. */
+    for(const r of batch) if(!pending.has(r.boot + ':' + r.ts)) pending.set(r.boot + ':' + r.ts, r);
+    if(e && e.name === 'QuotaExceededError'){
+      say('logmsg', 'browser storage full, dropping the oldest frames', 'err');
+      await dropOldest(0.2);
+    }
+  }
+}
+
+/* Deletes everything recorded before `cutoff` (epoch ms). */
+async function pruneRecording(cutoff){
+  if(!db){
+    const i = memRecs.findIndex(r => r.at >= cutoff);
+    memRecs.splice(0, i < 0 ? memRecs.length : i);
+    return;
+  }
+  try{
+    const tx = db.transaction('frames', 'readwrite');
+    const q = tx.objectStore('frames').index('at').openCursor(IDBKeyRange.upperBound(cutoff, true));
+    q.onsuccess = () => { const c = q.result; if(c){ c.delete(); c.continue(); } };
+    await idbDone(tx);
+  }catch(e){}
+}
+
+async function dropOldest(share){
+  try{
+    const s = db.transaction('frames').objectStore('frames');
+    const n = await idbReq(s.count());
+    const skip = Math.floor(n * share);
+    if(!skip) return;
+    const at = await new Promise(ok => {
+      const q = s.index('at').openCursor();
+      let moved = false;
+      q.onsuccess = () => {
+        const c = q.result;
+        if(!c) return ok(Infinity);
+        if(!moved){ moved = true; c.advance(skip); } else ok(c.key);
+      };
+      q.onerror = () => ok(null);
+    });
+    if(at !== null) await pruneRecording(at);
+  }catch(e){}
+}
+
+async function newestRecord(){
+  if(!db) return memRecs[memRecs.length - 1] || null;
+  try{
+    const c = await idbReq(db.transaction('frames').objectStore('frames').index('at').openCursor(null, 'prev'));
+    return c ? c.value : null;
+  }catch(e){ return null; }
+}
+
+/* Everything recorded, oldest first, for the downloads. */
+async function allRecords(){
+  await flushRecording();
+  if(!db) return memRecs.slice();
+  try{ return await idbReq(db.transaction('frames').objectStore('frames').index('at').getAll()); }
+  catch(e){ return []; }
+}
+
+/* Walks the recording newest first ('prev') or oldest first ('next'), handing
+   each record to `take` until it returns false, and resolves true if it ran out
+   of records instead. `after` continues a walk: only records beyond that one,
+   in the walk's direction, are handed over. The
+   narrowest index the filters allow does the walking; the filters themselves
+   are still applied to every record by the caller, so an index only ever saves
+   work and never decides what matches. */
+function scanRecording(take, after, dir){
+  if(!db){
+    if(dir === 'next'){
+      const k = after ? memRecs.lastIndexOf(after) : -1;
+      if(after && k < 0) return Promise.resolve(true);
+      for(let i = k + 1; i < memRecs.length; i++)
+        if(take(memRecs[i]) === false) return Promise.resolve(false);
+      return Promise.resolve(true);
+    }
+    let i = after ? memRecs.lastIndexOf(after) - 1 : memRecs.length - 1;
+    for(; i >= 0; i--) if(take(memRecs[i]) === false) return Promise.resolve(false);
+    return Promise.resolve(true);
+  }
+  return new Promise(resolve => {
+    let s;
+    try{ s = db.transaction('frames').objectStore('frames'); }catch(e){ resolve(true); return; }
+    const d = /^[0-9A-F]{2}$/.test(filters.dest) ? parseInt(filters.dest, 16) : null;
+    const c = /^[0-9A-F]{4}$/.test(filters.cmd) ? parseInt(filters.cmd, 16) : null;
+    /* A continued walk starts AT the last record's time, not beyond it: two
+       frames can carry the same millisecond, and the second would otherwise be
+       skipped. Within one time the store's key orders them, so what was already
+       handed over is passed by until the walk is beyond that record. */
+    const up = dir === 'next';
+    const lo = after && up ? after.at : -Infinity, hi = after && !up ? after.at : Infinity;
+    const span = (...k) => IDBKeyRange.bound([...k, lo], [...k, hi]);
+    const [src, range, keyOf] =
+        d !== null && c !== null ? [s.index('frame'), span(d, c), r => [r.d, r.c, r.at]]
+      : d !== null ? [s.index('dest'), span(d), r => [r.d, r.at]]
+      : c !== null ? [s.index('cmd'), span(c), r => [r.c, r.at]]
+      : [s.index('at'), !after ? null : up ? IDBKeyRange.lowerBound(lo) : IDBKeyRange.upperBound(hi),
+         r => r.at];
+    const from = after ? keyOf(after) : null, fromKey = after ? [after.boot, after.ts] : null;
+    const q = src.openCursor(range, up ? 'next' : 'prev');
+    q.onsuccess = () => {
+      const cur = q.result;
+      if(!cur) return resolve(true);
+      if(from !== null && indexedDB.cmp(cur.key, from) === 0
+         && indexedDB.cmp(cur.primaryKey, fromKey) * (up ? -1 : 1) >= 0){ cur.continue(); return; }
+      if(take(cur.value) === false) return resolve(false);
+      cur.continue();
+    };
+    q.onerror = () => resolve(true);
+  });
+}
+
+async function updateRecInfo(){
+  let n = 0, first = null;
+  if(db){
+    try{
+      const s = db.transaction('frames').objectStore('frames');
+      n = await idbReq(s.count());
+      const c = await idbReq(s.index('at').openCursor());
+      first = c ? c.value.at : null;
+    }catch(e){}
+  } else {
+    n = memRecs.length;
+    first = n ? memRecs[0].at : null;
+  }
+  const where = db ? 'kept in this browser for 3 days'
+                   : 'kept in memory only, this browser offers no storage';
+  if(!n){ $('recinfo').textContent = `Nothing recorded yet · ${where}`; return; }
+  const f = new Date(first);
+  $('recinfo').textContent =
+    `${human(n)} frames recorded since ${dateOf(f)} ${clockOf(f).slice(0, 5)} · ${where}`;
+}
+
+/* The payload as the screen spells it: data bytes after the command, spaced. */
+const payOf = r => (r.x.slice(4).match(/../g) || []).join(' ');
+
+/* What a live frame becomes in the recording. Also the place for what only
+   makes sense as frames arrive: the newest payload per frame for the editor's
+   preview, the identities for the reference tables, and the interval since the
+   same frame. */
+function recordOf(m){
+  const bytes = (m.x.match(/../g) || []).map(h => parseInt(h, 16));
+  const d = parseInt(m.d, 16);
+  /* -1 rather than null for a frame too short to carry a command: null is not a
+     valid IndexedDB key, and such a record would silently drop out of the
+     command indexes instead of sorting below every real command. */
+  const c = bytes.length >= 2 ? (bytes[0] << 8 | bytes[1]) : -1;
+  const key = c < 0 ? '' : `${hx(d)}.${hx(c >> 8)}${hx(c & 0xff)}`;
+  if(key){ lastPayload[key] = bytes.slice(2); seenKeys.add(key); }
 
   /* What the profile makes of this frame. Names alone when nothing has been
      decoded yet, name=value once it has -- the second form is what turns the
-     log from traffic into something you can read. */
-  if(cmd !== null) lastPayload[`${hx(dest)}.${hx(cmd >> 8)}${hx(cmd & 0xff)}`] = bytes.slice(2);
-
-  const all = entitiesFor(dest, cmd);
-  const known = all.filter(e => e.kind !== 'hidden');
-  const payHex = pay.map(hx).join(' ');
-  const key = cmd === null ? '' : `${hx(dest)}.${hx(cmd >> 8)}${hx(cmd & 0xff)}`;
-  const marker = hiddenMarkerFor(dest, cmd, payHex);
-  const hidden = !!marker;
-  if(key) seenKeys.add(key);
-
-  /* Only what actually decoded to something. An entity that has no value --
-     because its lookup holds the previous reading and there is none yet, say --
-     would otherwise leave its bare name standing in the column, a key with
-     nothing after it, which reads like a value went missing rather than like
-     there was nothing to report. */
+     log from traffic into something you can read. Only what actually decoded
+     to something: an entity with no value yet would leave its bare name
+     standing in the column, which reads like a value went missing. */
+  const known = entitiesFor(d, c < 0 ? null : c).filter(e => e.kind !== 'hidden');
   const decoded = known.map(e => ({ e, v: valueOf(e) })).filter(x => x.v !== null);
-  const summary = known.length
+  const sum = known.length
     ? decoded.map(x => `${x.e.name} = ${x.v}`).join(' · ')
-    : (cmd === null ? '' : 'not in this profile');
+    : (c < 0 ? '' : 'not in this profile');
+
+  const r = { boot, ts: m.ts, at: wallClock(m.ts).getTime(), l: m.l, d, c,
+              x: m.x.toUpperCase(), sum };
+  const prev = lastSeen.get(key);
+  lastSeen.set(key, m.ts);
+  if(prev !== undefined && prev <= m.ts) r.iv = m.ts - prev;
+  return r;
+}
+
+/* The shape the TXT and CSV renderers take. Rendered on the way out rather than
+   stored, so the hidden marker is the profile's current one. */
+function exportRec(r){
+  const bytes = (r.x.match(/../g) || []).map(h => parseInt(h, 16));
+  const cmd = r.c < 0 ? null : r.c;
+  const whole = bytes.length === r.l;
+  const pay = payOf(r);
+  const marker = hiddenMarkerFor(r.d, cmd, pay);
+  return { when: new Date(r.at), ts: r.ts, l: r.l, dest: r.d, cmd, whole,
+           crc: whole ? crc16([r.l, r.d, ...bytes]) : null, pay, ack: r.ack,
+           desc: marker ? (marker.name || 'hidden') : r.sum };
+}
+
+function rowFor(r){
+  const bytes = (r.x.match(/../g) || []).map(h => parseInt(h, 16));
+  const dest  = r.d;
+  const cmd   = r.c < 0 ? null : r.c;
+  /* The device caps how many bytes it forwards, so a long frame arrives
+     shortened -- in which case the checksum cannot honestly be recomputed. */
+  const whole = bytes.length === r.l;
+  const pay   = bytes.slice(2);
+  const crc   = whole ? crc16([r.l, dest, ...bytes]) : null;
+  const when  = new Date(r.at);
+
+  const known = entitiesFor(dest, cmd).filter(e => e.kind !== 'hidden');
+  const marker = hiddenMarkerFor(dest, cmd, pay.map(hx).join(' '));
+  const hidden = !!marker;
+  const summary = r.sum;
 
   const item = document.createElement('div');
-  /* The capture record behind this row. Kept as data rather than a finished
-     string because two of its columns are filled in later: the acknowledgement
-     arrives as its own message after the frame, and the meaning changes when a
-     profile is loaded or edited. The download renders these on the way out, so
-     it stays chronological, plain text, greppable and diffable -- only the
-     on-screen order is reversed. */
-  item._rec = {
-    when, ts: m.ts, l: m.l, dest, cmd, whole, crc,
-    pay: payHex,
-    desc: hidden ? (marker.name || 'hidden') : summary,
-  };
-  /* Kept on the element so a filter changed later can be applied to frames
-     already on screen, rather than only to whatever arrives next. */
-  item.dataset.dest = hx(dest);
-  item.dataset.cmd = cmd === null ? '' : hx(cmd >> 8) + hx(cmd & 0xff);
-  item.dataset.pay = payHex;
-  item.dataset.ts = m.ts;
-  /* Kept so the wording can be restored if a profile loads or changes after the
-     row was drawn and the frame is no longer marked hidden. */
-  item.dataset.summary = summary;
-  item.dataset.hidden = hidden ? '1' : '';
-  item.dataset.wire = `${m.l} ${m.d} ${m.x}`;
+  item.dataset.key = r.boot + ':' + r.ts;
+  item._r = r;
   const row  = document.createElement('div');
   row.className = 'fr fgrid' + (hidden ? ' hb' : '');
   row.innerHTML =
       `<span class="f-time">${clockOf(when)}</span>`
-    + `<span class="f-len c-len">${hx(m.l)}</span>`
+    + `<span class="f-len c-len">${hx(r.l)}</span>`
     + `<span class="f-dest">${hx(dest)}</span>`
     + `<span class="f-cmd">${cmd === null ? '·· ··' : hx(bytes[0]) + ' ' + hx(bytes[1])}</span>`
     + `<span>${pay.map(hx).join(' ') || '—'}${whole ? '' : ' …'}</span>`
@@ -1858,15 +2122,12 @@ function buildFrame(m){
          the meaning column is not also filled with the summary. */
       + `<span class="mtext">${esc(hidden ? '' : summary)}</span></span>`;
   item.appendChild(row);
-
-  /* Same key as the heartbeat bookkeeping above -- one identity per frame. */
-  const prev = lastSeen.get(key);
-  lastSeen.set(key, m.ts);
+  if(r.ack !== undefined) ackBadge(item, r.ack);
 
   row.onclick = () => {
     let h = `<b>Received</b> ${dateOf(when)} ${clockOf(when)}`
-          + ` <i>(device uptime ${(m.ts / 1000).toFixed(3)} s)</i><br>`
-          + `<b>LL</b> ${hx(m.l)} — ${m.l} data bytes, ${m.l + 4} on the wire<br>`
+          + ` <i>(device uptime ${(r.ts / 1000).toFixed(3)} s)</i><br>`
+          + `<b>LL</b> ${hx(r.l)} — ${r.l} data bytes, ${r.l + 4} on the wire<br>`
           + `<b>DS</b> ${hx(dest)} — node ${dest >> 4}: ${esc(nodeName(dest >> 4))}`
           + `${nodeScope(dest >> 4) ? ` <i>(${esc(nodeScope(dest >> 4))})</i>` : ''}<br>`
           + `<b>&nbsp;&nbsp;&nbsp;</b> subsystem ${dest & 15}: ${esc(subName(dest & 15))}`
@@ -1880,10 +2141,10 @@ function buildFrame(m){
           + `<b>RR RR</b> ` + (crc === null
               ? 'not shown — frame shortened for transport'
               : `${hx(crc >> 8)}${hx(crc & 0xff)} — checked by the firmware, recomputed here`);
-    /* The acknowledgement reaches the row after the frame was drawn, so it is
-       read back off the element rather than captured in this closure. */
-    if(item.dataset.ackv !== undefined){
-      const v = Number(item.dataset.ackv);
+    /* The acknowledgement reaches the record after the row was drawn, so it is
+       read back off the record rather than captured in this closure. */
+    if(r.ack !== undefined){
+      const v = r.ack;
       const why = (v & 0x0F) === 0x0A ? 'accepted'
                 : (v & 0x0F) === 0x3 ? 'refused, receive buffer too small'
                 : (v & 0x0F) === 0x7 ? 'refused, bad checksum'
@@ -1893,8 +2154,8 @@ function buildFrame(m){
       h += `<br><b>Answer</b> none — nobody acknowledged this frame`;
     }
 
-    if(prev !== undefined)
-      h += `<br><b>Interval</b> ${((m.ts - prev) / 1000).toFixed(3)} s since the same frame`;
+    if(r.iv !== undefined)
+      h += `<br><b>Interval</b> ${(r.iv / 1000).toFixed(3)} s since the same frame`;
     h += pay.length
        ? `<div style="margin-top:.4rem">` + pay.map((b, i) => {
            /* Several entities can read the same byte -- a status nibble and a
@@ -1923,34 +2184,38 @@ function buildFrame(m){
   return item;
 }
 
-/* Applied to a single frame and to the whole log alike, so changing a filter
-   reaches frames already on screen instead of only the next one to arrive. */
 /* Low nibble 0x0A is acceptance; anything else is a node that received the
    frame and refused it, which is worth seeing rather than counting quietly. */
-function attachAck(ts, v){
-  const el = $('log').querySelector(`[data-ts="${ts}"]`);
-  if(!el) return;
-  const ok = (v & 0x0F) === 0x0A;
-  el.dataset.ack = ok ? 'ok' : 'no';
-  el.dataset.ackv = v;
-  /* Also into the capture record, so the downloaded line carries the
-     acknowledgement column rather than only the screen showing a badge. */
-  if(el._rec) el._rec.ack = v;
-  const mean = el.querySelector('.f-mean');
+function ackBadge(item, v){
+  const mean = item.querySelector('.f-mean');
   if(!mean) return;
   const old = mean.querySelector('.ack');
   if(old) old.remove();
+  const ok = (v & 0x0F) === 0x0A;
   /* The high nibble carries the node that answered, which is not always the
      one addressed -- a broadcast is answered by whoever felt spoken to, and
      that is worth being able to see. */
   const node = (v >> 4) & 0x0F;
-  const label = `${ok ? 'ACK' : 'NAK'}\u00b7${node}`;
+  const label = `${ok ? 'ACK' : 'NAK'}·${node}`;
   const title = (ok ? `Accepted by node ${node}`
        : (v & 0x0F) === 0x3 ? `Node ${node} refused it: buffer too small`
        : (v & 0x0F) === 0x7 ? `Node ${node} refused it: bad checksum`
        : `Node ${node} refused it`) + ` (0x${hx(v)})`;
   mean.insertAdjacentHTML('afterbegin',
     `<span class="ack ${ok ? 'ok' : 'no'}" title="${title}">${label}</span>`);
+}
+
+/* The acknowledgement arrives after the frame it answers and carries that
+   frame's receive time, so it is matched rather than assumed to belong to
+   whatever came last -- a dropped frame would otherwise mislabel the one
+   before it. It goes into the record too, so the download carries it. */
+function attachAck(ts, v){
+  const r = recentByTs.get(ts);
+  if(!r) return;
+  r.ack = v;
+  record(r);
+  const el = $('log').querySelector(`[data-key="${r.boot}:${ts}"]`);
+  if(el) ackBadge(el, v);
 }
 
 /* Marks the nibbles this bus has actually used, so the reference reads as a
@@ -1981,93 +2246,302 @@ function renderReference(){
   rows('reftab-sub', subs, seenSubs, subName, subScope);
 }
 
-function frameMatches(el){
-  const d = el.dataset;
-  if(filters.hideHidden && d.hidden) return false;
-  if(filters.dest && !d.dest.toUpperCase().includes(filters.dest)) return false;
-  if(filters.cmd  && !d.cmd.toUpperCase().includes(filters.cmd)) return false;
+/* Whether a recorded frame passes the filters other than the repeat switch.
+   The hidden marker is asked of the current profile, so loading or editing one
+   changes what is folded away without anything having to be re-recorded. */
+function recPasses(r){
+  if(filters.dest && !hx(r.d).includes(filters.dest)) return false;
+  if(filters.cmd && (r.c < 0 || !(hx(r.c >> 8) + hx(r.c & 0xff)).includes(filters.cmd))) return false;
+  const pay = payOf(r);
   /* Spaces are stripped from both sides, so "0C00" finds a payload printed as
      "0C 00" and nobody has to guess the separator. */
-  if(filters.pay){
-    const flat = d.pay.replace(/ /g, '').toUpperCase();
-    if(!flat.includes(filters.pay.replace(/ /g, '').toUpperCase())) return false;
-  }
+  if(filters.pay && !pay.replace(/ /g, '').includes(filters.pay.replace(/ /g, ''))) return false;
+  if(filters.hideHidden && hiddenMarkerFor(r.d, r.c < 0 ? null : r.c, pay)) return false;
   return true;
 }
 
-/* Applies every filter to one frame row. Called oldest first, since whether a
-   frame is a repeat depends on the frame shown before it. */
-function filterFrame(el){
-  let ok = frameMatches(el);
-  if(ok){
-    const repeat = el.dataset.wire === prevShown;
-    prevShown = el.dataset.wire;
-    if(filters.hideRepeats && repeat) ok = false;
-  }
-  el.classList.toggle('filtered', !ok);
-  return ok;
+/* The whole frame, so a repeat can be told apart from a change. The boot is
+   part of it: across a restart the neighbour is not the same conversation. */
+const wireOf = r => `${r.boot} ${r.l} ${r.d} ${r.x}`;
+
+/* The date of the newest row on screen, so a run that crosses midnight gets a
+   line saying where -- the time column alone would read as going backwards. */
+let topDay = null;
+const dayLine = day => {
+  const el = document.createElement('div');
+  el.className = 'day';
+  el.textContent = `— ${day} —`;
+  return el;
+};
+const emptyLine = text => {
+  const el = document.createElement('div');
+  el.className = 'empty';
+  el.textContent = text;
+  return el;
+};
+
+/* Newest first. Prepending pushes everything below it down, so a reader who
+   has scrolled into the history would have the text slide away under them.
+   Compensating by the height just inserted holds it still; at the very top
+   there is nothing to preserve and the row simply appears. */
+function prependKeep(log, el){
+  const first = log.querySelector('.empty');
+  if(first) first.remove();
+  const atTop = log.scrollTop < 8;
+  log.prepend(el);
+  if(!atTop) log.scrollTop += el.offsetHeight;
 }
 
-/* Rows that fall off the bottom take their place as a neighbour with them. The
-   oldest frame left is then a repeat of nothing on screen, like one after a
-   gap -- were it kept hidden, a frame sent over and over would empty the log
-   once its first copy scrolled away. */
-function revealOldest(log){
-  for(let el = log.lastElementChild; el; el = el.previousElementSibling){
-    if(el.classList.contains('drop')) return;
-    if(!el.dataset.ts) continue;
-    if(frameMatches(el)){ el.classList.remove('filtered'); return; }
-  }
+/* The screen is a window onto the recording, at most WINDOW_MAX rows. Pages of
+   SHOW_MAX are fetched as the reader scrolls towards either end, and rows that
+   leave the window on the far side are dropped, so scrolling through three days
+   costs no more memory than looking at the newest frames. While the window does
+   not reach the newest frame, live frames are only recorded; scrolling back up
+   fetches them like any other page, and at the top the log is live again. */
+const WINDOW_MAX = 3000;
+let atHead = true;
+
+const rowsOf = log => log.querySelectorAll('[data-key]');
+
+function updateCount(){
+  const n = rowsOf($('log')).length;
+  $('fcount').textContent = !n ? ''
+    : `${n} shown` + (atHead ? '' : ' · newer above') + (more.done ? '' : ' · older below');
 }
 
-function applyFilters(){
-  /* The log is newest first; walked from the bottom so each frame meets its
-     predecessor first. Frame rows carry a timestamp; the drop and gap markers
-     do not, and only reset the neighbour. */
-  const all = [...$('log').children].reverse();
-  shownCount = 0; hiddenCount = 0;
-  prevShown = null;
-  for(const el of all){
-    if(el.classList.contains('drop')){ prevShown = null; continue; }
-    if(!el.dataset.ts) continue;
-    const d = el.dataset;
-    /* Re-evaluate against the current profile: a profile that loaded or changed
-       after this row was drawn should mark or unmark it without a redraw. */
-    const dest = parseInt(d.dest, 16);
-    const cmd = d.cmd ? parseInt(d.cmd, 16) : null;
-    const marker = hiddenMarkerFor(dest, cmd, d.pay);
-    const nowHidden = marker ? '1' : '';
-    if(nowHidden !== (d.hidden || '')){
-      d.hidden = nowHidden;
-      /* The capture record follows the screen: a frame that has just become
-         hidden is described by the marker that hides it. */
-      if(el._rec) el._rec.desc = nowHidden ? (marker.name || 'hidden') : (d.summary || '');
-      const row = el.querySelector('.fr');
-      if(row) row.classList.toggle('hb', !!nowHidden);
-      const mean = el.querySelector('.f-mean');
-      if(mean){
-        const tag = mean.querySelector('.hbtag');
-        const txt = mean.querySelector('.mtext');
-        /* Placed before the text rather than at the very start, so an
-           acknowledgement badge added earlier keeps its position in front. */
-        if(nowHidden && !tag && txt)
-          txt.insertAdjacentHTML('beforebegin', `<span class="hbtag">${esc(marker.name || 'hidden')}</span>`);
-        if(!nowHidden && tag) tag.remove();
-        if(txt) txt.textContent = nowHidden ? '' : (d.summary || '');
-      }
-    }
-    filterFrame(el) ? shownCount++ : hiddenCount++;
+/* Shown at the top while newer frames exist that the window does not hold. */
+function markNewer(log){
+  const old = log.querySelector('.newer');
+  if(atHead){ if(old) old.remove(); return; }
+  if(old) return;
+  const el = dayLine('newer frames above · scroll up');
+  el.classList.add('newer');
+  log.prepend(el);
+}
+
+/* Frames that arrive while the screen is being redrawn or paged wait here and
+   are drawn once that is done, so they land above it, not under it. */
+let rebuildGen = 0, rebuilding = false, paging = false;
+const lateRecs = [];
+
+/* Where the walk towards older frames stopped, so scrolling to the bottom can
+   carry on from there: `after` is the last record read, `cand` the match still
+   waiting to learn whether it repeats the next older one. */
+let more = { after: null, cand: null, done: true };
+
+/* Reads up to `limit` matches older than `after`, newest first. Whether a frame
+   repeats the one shown before it is only known once the next older match has
+   been read, so each candidate waits for that one before it is kept or
+   dropped. The oldest match has no neighbour and is always kept, so a frame
+   sent over and over still shows. */
+async function collect(gen, after, cand, limit){
+  const out = [];
+  let newest = null;
+  const exhausted = await scanRecording(r => {
+    if(gen !== rebuildGen) return false;
+    if(!recPasses(r)) return true;
+    if(!newest) newest = r;
+    if(cand && !(filters.hideRepeats && wireOf(cand) === wireOf(r))) out.push(cand);
+    cand = r;
+    return out.length < limit;
+  }, after, 'prev');
+  if(exhausted && cand){ out.push(cand); cand = null; }
+  return { out, newest, more: exhausted ? { after: null, cand: null, done: true }
+                                        : { after: cand, cand, done: false } };
+}
+
+/* Appends rows below what is on screen, with a line wherever the date changes
+   and one at the very end once the recording has nothing older. */
+function appendRows(log, recs, done){
+  const last = [...rowsOf(log)].pop();
+  let day = last ? dateOf(new Date(last._r.at)) : null;
+  const frag = document.createDocumentFragment();
+  for(const r of recs){
+    const d = dateOf(new Date(r.at));
+    if(day !== null && d !== day) frag.append(dayLine(d));
+    day = d;
+    frag.append(rowFor(r));
   }
-  $('fcount').textContent = hiddenCount ? `${shownCount} shown, ${hiddenCount} hidden` : '';
+  if(done && (last || recs.length)){
+    const end = dayLine('start of the recording');
+    end.classList.add('end');
+    frag.append(end);
+  }
+  log.append(frag);
+}
+
+/* Puts rows above what is on screen. `recs` come oldest first, the way the walk
+   towards newer frames reads them. Everything inserted lies above the reader,
+   so the scroll position moves by the height added and the text stays put. */
+function prependRows(log, recs){
+  const h = log.scrollHeight;
+  const old = log.querySelector('.newer');
+  if(old) old.remove();
+  const top = rowsOf(log)[0];
+  const frag = document.createDocumentFragment();
+  let day = null;
+  for(let i = recs.length - 1; i >= 0; i--){
+    const d = dateOf(new Date(recs[i].at));
+    if(day !== null && d !== day) frag.append(dayLine(d));
+    day = d;
+    frag.append(rowFor(recs[i]));
+  }
+  if(top && day !== null){
+    const td = dateOf(new Date(top._r.at));
+    if(td !== day) frag.append(dayLine(td));
+  }
+  log.prepend(frag);
+  markNewer(log);
+  log.scrollTop += log.scrollHeight - h;
+  const first = rowsOf(log)[0];
+  topDay = first ? dateOf(new Date(first._r.at)) : null;
+}
+
+/* Drops rows from the top beyond the window, holding the reader's place. */
+function dropTop(log){
+  const rows = rowsOf(log);
+  if(rows.length <= WINDOW_MAX) return;
+  const h = log.scrollHeight;
+  const keep = rows[rows.length - WINDOW_MAX];
+  while(log.firstElementChild && log.firstElementChild !== keep) log.firstElementChild.remove();
+  atHead = false;
+  markNewer(log);
+  log.scrollTop -= h - log.scrollHeight;
+}
+
+/* Drops rows from the bottom beyond `max`; the walk towards older frames then
+   carries on from the new last row. */
+function dropBottom(log, max){
+  const rows = rowsOf(log);
+  if(rows.length <= max) return;
+  const keep = rows[max - 1];
+  while(log.lastElementChild && log.lastElementChild !== keep) log.lastElementChild.remove();
+  more = { after: keep._r, cand: null, done: false };
+}
+
+/* Live frames held back while a page loaded are drawn if the window now
+   reaches the newest frame; otherwise they wait in the recording. */
+function releaseLate(){
+  const late = lateRecs.splice(0);
+  if(atHead) for(const r of late) showLive(r);
+}
+
+async function loadOlder(){
+  if(more.done || paging || rebuilding) return;
+  paging = true;
+  const gen = rebuildGen;
+  const res = await collect(gen, more.after, more.cand, SHOW_MAX);
+  paging = false;
+  if(gen !== rebuildGen) return;
+  more = res.more;
+  const log = $('log');
+  appendRows(log, res.out, more.done);
+  dropTop(log);
+  releaseLate();
+  updateCount();
+}
+
+/* The walk towards newer frames starts at the top row. That row is shown, so
+   it is the neighbour the next newer match is compared with; matches that
+   repeat it are passed over and change nothing, since they carry the same
+   frame. */
+async function loadNewer(){
+  if(atHead || paging || rebuilding) return;
+  const log = $('log');
+  const top = rowsOf(log)[0];
+  if(!top){ rebuild(); return; }
+  paging = true;
+  const gen = rebuildGen;
+  await flushRecording();
+  const got = [];
+  let prev = wireOf(top._r);
+  const exhausted = await scanRecording(r => {
+    if(gen !== rebuildGen) return false;
+    if(!recPasses(r)) return true;
+    const w = wireOf(r);
+    const repeat = w === prev;
+    prev = w;
+    if(!(filters.hideRepeats && repeat)) got.push(r);
+    return got.length < SHOW_MAX;
+  }, top._r, 'next');
+  paging = false;
+  if(gen !== rebuildGen) return;
+  if(exhausted){ atHead = true; prevShown = prev; }
+  prependRows(log, got);
+  dropBottom(log, WINDOW_MAX);
+  releaseLate();
+  updateCount();
+}
+
+$('log').addEventListener('scroll', () => {
+  const l = $('log');
+  if(l.scrollTop + l.clientHeight >= l.scrollHeight - 300) loadOlder();
+  if(l.scrollTop < 300) loadNewer();
+});
+
+/* Draws the screen afresh from the recording, for the filters as they are now.
+   Every filter therefore reaches back over everything recorded, not just over
+   the rows that happened to be on screen; the newest matches come first, and
+   scrolling to the bottom fetches the next older ones. */
+async function rebuild(){
+  const gen = ++rebuildGen;
+  rebuilding = true;
+  $('fcount').textContent = 'searching…';
+  await flushRecording();
+  const res = await collect(gen, null, null, SHOW_MAX);
+  if(gen !== rebuildGen) return;
+  const shown = res.out, newest = res.newest;
+  more = res.more;
+  atHead = true;
+
+  const log = $('log');
+  log.replaceChildren();
+  if(shown.length) appendRows(log, shown, more.done);
+  else log.append(emptyLine(filters.dest || filters.cmd || filters.pay
+        ? 'Nothing recorded matches these filters.' : 'Waiting for traffic…'));
+  log.scrollTop = 0;
+  prevShown = newest ? wireOf(newest) : null;
+  topDay = shown.length ? dateOf(new Date(shown[0].at)) : null;
+  rebuilding = false;
+  for(const r of lateRecs.splice(0)) if(!newest || r.at > newest.at) showLive(r);
+  updateCount();
+}
+
+let rebuildTimer = 0;
+function scheduleRebuild(){ clearTimeout(rebuildTimer); rebuildTimer = setTimeout(rebuild, 150); }
+
+/* A live frame: drawn on top if it passes the filters and is not a repeat of
+   the newest frame that did -- and only while the window reaches the newest
+   frame. Otherwise it is in the recording, and scrolling up will fetch it. */
+function showLive(r){
+  if(rebuilding || paging){ lateRecs.push(r); return; }
+  if(!atHead) return;
+  if(!recPasses(r)) return;
+  const w = wireOf(r);
+  const repeat = w === prevShown;
+  prevShown = w;
+  if(filters.hideRepeats && repeat) return;
+  const log = $('log');
+  const atTop = log.scrollTop < 8;
+  const day = dateOf(new Date(r.at));
+  if(topDay !== null && day !== topDay) prependKeep(log, dayLine(topDay));
+  topDay = day;
+  prependKeep(log, rowFor(r));
+  /* Back to the newest page while the reader is at the top. Further down,
+     nothing may move away from under somebody reading: once the window is
+     full, it lets go of the newest end instead and stops following live. */
+  if(atTop) dropBottom(log, SHOW_MAX);
+  else dropTop(log);
+  updateCount();
 }
 
 for(const [id, key] of [['f-dest','dest'], ['f-cmd','cmd'], ['f-pay','pay']]){
-  $(id).oninput = ev => { filters[key] = ev.target.value.trim().toUpperCase(); applyFilters(); };
+  $(id).oninput = ev => { filters[key] = ev.target.value.trim().toUpperCase(); scheduleRebuild(); };
 }
 /* The heading reads "Show", so the switch shows rather than hides -- a toggle
    whose label is a negation makes the reader translate before deciding. */
-$('f-hb').onchange = ev => { filters.hideHidden = !ev.target.checked; applyFilters(); };
-$('f-rep').onchange = ev => { filters.hideRepeats = !ev.target.checked; applyFilters(); };
+$('f-hb').onchange = ev => { filters.hideHidden = !ev.target.checked; scheduleRebuild(); };
+$('f-rep').onchange = ev => { filters.hideRepeats = !ev.target.checked; scheduleRebuild(); };
 $('f-cols').onchange = ev => { $('mon').classList.toggle('compact', !ev.target.checked); };
 
 function connectWs(){
@@ -2093,63 +2567,106 @@ function connectWs(){
         for(const v of seenSeq) if(v <= lastSeq - 2000) seenSeq.delete(v);
     }
 
-    const first = log.querySelector('.empty');
-    if(first) first.remove();
-
-    /* The acknowledgement arrives after the frame it answers and carries that
-       frame's receive time, so it is matched rather than assumed to belong to
-       whatever was drawn last -- a dropped frame would otherwise mislabel the
-       one before it. */
     if(m.t === 'a'){ attachAck(m.ts, m.v); return; }
 
-    let div;
     if(m.t === 'drop' || m.t === 'gap'){
       dropped += (m.n || 0);
       prevShown = null;
-      div = document.createElement('div');
+      const div = document.createElement('div');
       div.className = 'drop';
       div.textContent = m.t === 'gap'
         ? '— earlier frames rolled off the buffer —'
         : `— ${m.n} frames dropped (browser too slow) —`;
       say('logmsg', m.t === 'gap' ? 'history truncated' : `${dropped} dropped`, 'busy');
-    } else {
-      div = buildFrame(m);
-      lines.push(div._rec);
-      if(lines.length > 5000) lines.shift();
+      if(!rebuilding) prependKeep(log, div);
+      return;
     }
-    /* Newest first. Prepending pushes everything below it down, so a reader who
-       has scrolled into the history would have the text slide away under them.
-       Compensating by the height just inserted holds it still; at the very top
-       there is nothing to preserve and the frame simply appears. */
-    if(m.t !== 'drop' && m.t !== 'gap') filterFrame(div);
 
-    const atTop = log.scrollTop < 8;
-    log.prepend(div);
-    if(!atTop) log.scrollTop += div.offsetHeight;
-    if(log.childElementCount > 600){
-      while(log.childElementCount > 600) log.removeChild(log.lastChild);
-      revealOldest(log);
+    /* A stamp that runs backwards by more than reordering could explain means
+       the device restarted, and its frames now belong to a new boot. */
+    if(boot === null || m.ts < lastFrameTs - 5000){
+      boot = settleBoot(Date.now() - m.ts);
+      recentByTs.clear();
+      if(lastFrameTs >= 0) resumeTs = -1;
     }
+    lastFrameTs = m.ts;
+    if(m.ts <= resumeTs) return;
+
+    const r = recordOf(m);
+    recentByTs.set(m.ts, r);
+    if(recentByTs.size > 2000) recentByTs.delete(recentByTs.keys().next().value);
+    record(r);
+    showLive(r);
   };
   ws.onclose = () => setTimeout(connectWs, 2000);
 }
 
-/* Both exports are rendered here rather than when a row was drawn, because two
-   of the fields are only known later: the acknowledgement arrives as its own
-   message after the frame it answers, and the meaning changes when a profile is
-   loaded or edited. */
-function saveCapture(ext, mime, text){
-  if(!lines.length){ say('logmsg','nothing captured yet','err'); return; }
-  const blob = new Blob([text], {type: mime});
+/* Both exports are rendered here rather than when a frame was recorded,
+   because two of the fields are only known later: the acknowledgement arrives
+   as its own message after the frame it answers, and whether the profile hides
+   a frame changes when a profile is loaded or edited. They cover everything
+   recorded, not only what the filters leave on screen. */
+async function saveCapture(ext, mime, render){
+  say('logmsg', 'preparing…', 'busy');
+  const recs = (await allRecords()).map(exportRec);
+  if(!recs.length){ say('logmsg', 'nothing recorded yet', 'err'); return; }
+  const blob = new Blob([render(recs)], {type: mime});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `bsh-capture-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.${ext}`;
   a.click(); URL.revokeObjectURL(a.href);
+  say('logmsg', '');
 }
 $('download').onclick = () =>
-  saveCapture('txt', 'text/plain', lines.map(frameText).join('\n') + '\n');
+  saveCapture('txt', 'text/plain', recs => recs.map(frameText).join('\n') + '\n');
 $('download-csv').onclick = () =>
-  saveCapture('csv', 'text/csv', csvText(lines));
+  saveCapture('csv', 'text/csv', csvText);
+
+$('rec-clear').onclick = async () => {
+  const yes = await ask({
+    title: 'Delete the recording?',
+    sub: 'Every frame this browser has kept from this adapter is removed. '
+       + 'Files you have already downloaded are not affected.',
+    fields: [], ok: 'Delete', danger: true,
+  });
+  if(!yes) return;
+  pending.clear();
+  memRecs.length = 0;
+  if(db){
+    try{
+      const tx = db.transaction('frames', 'readwrite');
+      tx.objectStore('frames').clear();
+      await idbDone(tx);
+    }catch(e){ say('logmsg', 'could not delete the recording', 'err'); return; }
+  }
+  prevShown = null; topDay = null; atHead = true;
+  more = { after: null, cand: null, done: true };
+  $('log').replaceChildren(emptyLine('Waiting for traffic…'));
+  updateCount(); updateRecInfo();
+  say('logmsg', 'recording deleted', 'ok');
+};
+
+/* The recording has to be open, and the boot known, before the first frame
+   arrives -- otherwise the replay of what the adapter still holds would be
+   drawn as new on top of the same frames recorded before the reload. */
+async function startMonitor(){
+  db = await openRecording();
+  setInterval(flushRecording, 1000);
+  /* Best effort: a write started here may not finish before the page goes,
+     and whatever is lost is still in the adapter's ring for the next visit. */
+  addEventListener('pagehide', flushRecording);
+  await pruneRecording(Date.now() - KEEP_MS);
+  setInterval(() => pruneRecording(Date.now() - KEEP_MS), 3600 * 1000);
+  const last = await newestRecord();
+  if(last) lastStoredBoot = last.boot;
+  await refresh();
+  if(info) boot = settleBoot(info.time && info.time.synced ? info.time.boot_epoch_ms
+                                                           : Date.now() - info.uptime_s * 1000);
+  if(last && boot !== null && last.boot === boot) resumeTs = last.ts;
+  await rebuild();
+  updateRecInfo(); setInterval(updateRecInfo, 10000);
+  connectWs();
+}
 
 /* ---------------- settings actions ---------------- */
 $('savename').onclick = async () => {
@@ -3704,12 +4221,9 @@ addEventListener('beforeunload', ev => { if(draftDirty){ ev.preventDefault(); ev
    paste into curl, rather than a placeholder the reader has to substitute. */
 $('api-base').textContent = location.origin + '/';
 
-refresh(); setInterval(refresh, 3000); connectWs(); fwStatus();
+startMonitor(); setInterval(refresh, 3000); fwStatus();
 loadCatalogue(); refreshAppliance(); setInterval(refreshAppliance, 3000);
 refreshHealth(); setInterval(refreshHealth, 10000);
-/* A frame only reveals itself as a heartbeat by repeating, so rows drawn before
-   the third sighting need re-marking. Cheap at the few hundred rows kept. */
-setInterval(applyFilters, 4000);
 renderReference(); setInterval(renderReference, 5000);
 loadMqtt(); setInterval(loadMqtt, 10000);
 </script>

@@ -232,7 +232,9 @@ profiles that match. If yours is among them, one click uses it.
 
 *The live monitor is where that listening becomes visible: every frame on the
 wire, and beside it what the active profile makes of it. Frames it explains
-nothing about say so plainly, and those are the raw material for the next one.*
+nothing about say so plainly, and those are the raw material for the next one.
+Your browser keeps what the monitor receives for three days, so the filters
+search all of it and the downloads contain it.*
 
 If your exact model is not there, you have three ways forward, in increasing
 order of effort:
