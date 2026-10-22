@@ -169,12 +169,17 @@ jobs:
             site/firmware/bsh-dbus-adapter-kiu-c3-app-only.bin \
             --clobber
 
+      # A pre-release is for the people asked to test it. The web installer is
+      # what everyone else flashes from, so it stays on the last release: the
+      # release candidate gets its images attached and nothing more.
       - uses: actions/upload-pages-artifact@v5
+        if: ${{ !github.event.release.prerelease }}
         with:
           path: site
 
   publish-installer:
     needs: build
+    if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
