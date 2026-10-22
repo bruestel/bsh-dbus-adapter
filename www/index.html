@@ -460,12 +460,18 @@ dialog .dbody{padding:1.15rem 1.25rem}
 dialog h3{margin:0 0 .2rem;font-size:.98rem;font-weight:620}
 dialog p.dsub{margin:0 0 1rem;font-size:.82rem;color:var(--dim)}
 /* The frame detail needs room the form dialog does not: a payload of a dozen
-   bytes, each with the entity that reads it underneath. */
-#fdlg{max-width:min(36rem,calc(100vw - 2rem))}
+   bytes, each in three spellings with the entity that reads it underneath --
+   and the comparison, which shows two of them in binary. One width for both,
+   so switching from one to the other does not jump. */
+#fdlg{width:min(56rem,calc(100vw - 2rem));max-width:none}
 #fdlg .fdet{margin:0;padding:0;background:transparent;border-left:0;font-size:12px}
 #fdlg h3{font-family:ui-monospace,Menlo,monospace}
-/* Two frames side by side need more room still: seven bytes in binary, twice. */
-#fdlg.cmp{max-width:min(56rem,calc(100vw - 2rem))}
+/* The bytes on a grid of equal boxes: flowed, they were as wide as the
+   entity names under them and wrapped into ragged rows. A long name now wraps
+   inside its own box. */
+#fdlg .pbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.2rem,1fr));gap:.3rem;
+           margin-top:.5rem}
+#fdlg .pbs .pb{display:block;margin:0}
 #fdlg.cmp #fdlg-prev,#fdlg.cmp #fdlg-pick{display:none}
 
 /* Every spelling of the two payloads, one row each, older above newer, byte
@@ -2753,7 +2759,7 @@ function rowFor(r){
     if(r.iv !== undefined)
       h += `<br><b>Interval</b> ${(r.iv / 1000).toFixed(3)} s since the same frame`;
     h += pay.length
-       ? `<div style="margin-top:.4rem">` + pay.map((b, i) => {
+       ? `<div class="pbs">` + pay.map((b, i) => {
            /* Several entities can read the same byte -- a status nibble and a
               flag out of it, say -- so they are all named, not just the first. */
            const on = known.filter(e => covers(e, i));
