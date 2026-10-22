@@ -105,14 +105,20 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
    than informative -- the length is implied by the payload shown beside it and
    the checksum has already been verified -- so they are noise in the common
    case and only wanted while chasing a framing problem. */
-#mon.compact .fgrid{grid-template-columns:6.4rem 3.6rem 4.6rem minmax(0,1fr) minmax(0,1.5fr)}
+#mon.compact .fgrid{grid-template-columns:6.4rem 3.6rem 4.6rem minmax(0,max(var(--pay,12rem),7rem)) minmax(9rem,1fr)}
 #mon.compact .c-len,#mon.compact .c-crc{display:none}
 
 /* The wire format is LL DS CC CC <payload> RR RR, so the monitor lays every
    frame out in exactly those columns. The header and the rows share one grid,
-   which is what keeps the fields aligned down the whole log. */
+   which is what keeps the fields aligned down the whole log.
+
+   The payload column is as wide as the longest payload on screen (--pay, set
+   by fitPay), so the meaning starts right after the bytes instead of across a
+   gap sized for frames that are not there. The meaning keeps at least 9rem:
+   when both do not fit, the payload wraps inside its column rather than push
+   the meaning off the line. Never so narrow that its filter is unusable. */
 .fgrid{display:grid;gap:.5rem;
-       grid-template-columns:6.4rem 2.4rem 3.6rem 4.6rem minmax(0,1fr) 3rem minmax(0,1.4fr)}
+       grid-template-columns:6.4rem 2.4rem 3.6rem 4.6rem minmax(0,max(var(--pay,12rem),7rem)) 3rem minmax(9rem,1fr)}
 .fmask{background:var(--surface2);border:1px solid var(--line);border-radius:.55rem .55rem 0 0;
        padding:.4rem .35rem;font:11px/1.25 ui-monospace,Menlo,monospace;color:var(--fg);
        letter-spacing:.02em}
@@ -138,14 +144,6 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
    halves of a byte are set slightly apart, without a character that would
    end up in a copied payload. */
 .by .nb{display:inline-block;width:.35ch}
-/* Binary takes the room of both: side by side, a seven-byte payload and its
-   meaning each got half a line and neither could be read. So the meaning moves
-   to a line of its own, under the payload, and the payload has the rest of the
-   row. */
-#mon.fmt-bin .fgrid{grid-template-columns:6.4rem 2.4rem 3.6rem 4.6rem minmax(0,1fr) 3rem}
-#mon.fmt-bin.compact .fgrid{grid-template-columns:6.4rem 3.6rem 4.6rem minmax(0,1fr)}
-#mon.fmt-bin .fgrid>:last-child{grid-column:5 / -1}
-#mon.fmt-bin.compact .fgrid>:last-child{grid-column:4 / -1}
 
 /* A choice of one out of a few, side by side. */
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:.4rem;overflow:hidden}
@@ -1245,6 +1243,9 @@ function show(which, fromUser){
   /* Built on first visit rather than at startup: it needs the profile, and a
      tab nobody opens should not cost a request on every boot. */
   if(which === 'editor' && !editorReady){ editorReady = true; loadMine(); loadProfileCatalogue(); }
+  /* The payload column is measured, which a hidden log cannot be. Deferred,
+     which on the first call is also after the script has run. */
+  if(which === 'home') setTimeout(() => fitPay());
   if(fromUser) location.hash = which;
 }
 for(const v of VIEWS) $('tab-' + v).onclick = () => { routed = true; show(v, true); };
@@ -2645,6 +2646,38 @@ function exportRec(r){
            desc: marker ? (marker.name || 'hidden') : summaryOf(r.d, cmd, bytes.slice(2)) };
 }
 
+/* The longest payload drawn since the screen was last rebuilt, in bytes, and
+   what one byte measures in the log's font in each format -- measured rather
+   than computed, because a byte is characters plus margins plus a space. */
+let payMax = 0;
+const byteSpan = {};
+function payWidth(n){
+  if(!byteSpan[numFmt]){
+    const s = document.createElement('span');
+    s.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+    $('log').append(s);
+    s.innerHTML = byteHtml(0);
+    const one = s.getBoundingClientRect().width;
+    s.innerHTML = bytesHtml([0, 0]);
+    const two = s.getBoundingClientRect().width;
+    s.remove();
+    /* Not cached while the log is not laid out -- another tab is showing. */
+    if(!one) return 0;
+    byteSpan[numFmt] = { one, step: two - one };
+  }
+  const m = byteSpan[numFmt];
+  return m.one + (n - 1) * m.step;
+}
+/* Binary wraps after three bytes whatever the room: 24 bits are as much as
+   anyone reads across, and fixed groups keep byte 3 under byte 0. Hex and
+   decimal fit a whole frame on a line and only wrap when the room runs out. */
+const BIN_PER_LINE = 3;
+function fitPay(){
+  const w = payMax ? payWidth(numFmt === 'bin' ? Math.min(payMax, BIN_PER_LINE) : payMax) : 0;
+  if(w) $('mon').style.setProperty('--pay', `${Math.ceil(w) + 4}px`);
+}
+const notePay = n => { if(n > payMax){ payMax = n; fitPay(); } };
+
 function rowFor(r){
   const bytes = (r.x.match(/../g) || []).map(h => parseInt(h, 16));
   const dest  = r.d;
@@ -2653,6 +2686,7 @@ function rowFor(r){
      shortened -- in which case the checksum cannot honestly be recomputed. */
   const whole = bytes.length === r.l;
   const pay   = bytes.slice(2);
+  notePay(pay.length);
   const crc   = whole ? crc16([r.l, dest, ...bytes]) : null;
   const when  = new Date(r.at);
 
@@ -2675,7 +2709,8 @@ function rowFor(r){
     + `<span class="f-pay">${bytesHtml(pay, filters.showChanges ? pvOf(r) : undefined) || '—'}`
       + `${whole ? '' : ' …'}</span>`
     + `<span class="f-crc c-crc">${crc === null ? '…' : hx(crc >> 8) + hx(crc & 0xff)}</span>`
-    + `<span class="f-mean${known.length ? '' : ' none'}">`
+    /* The full text on hover, for when the column cuts it short. */
+    + `<span class="f-mean${known.length ? '' : ' none'}"${!hidden && summary ? ` title="${esc(summary)}"` : ''}>`
       + `${hidden ? `<span class="hbtag">${esc(marker.name || 'hidden')}</span>` : ''}`
       /* When a frame is marked hidden the tag names it (from the profile), so
          the meaning column is not also filled with the summary. */
@@ -3193,6 +3228,7 @@ async function rebuild(){
   atHead = true;
 
   const log = $('log');
+  payMax = 0;
   log.replaceChildren();
   if(shown.length) appendRows(log, shown, more.done);
   else log.append(emptyLine(filters.dest || filters.cmd || filters.pay
