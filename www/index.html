@@ -282,6 +282,27 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
 .edid,.edname{grid-column:1}
 .edid label{display:block;font-size:.72rem;color:var(--dim);margin-bottom:.15rem}
 .edrow.marker{grid-template-columns:11rem 1fr}
+/* Which bits of the byte a bit operation reads: the byte drawn as eight boxes,
+   bit 7 on the left as in binary, each showing its current value from the
+   traffic. Picking a box beats typing a bit number, because the number alone
+   does not say which end bit 0 is. */
+.edbits{display:flex;align-items:flex-end;flex-wrap:wrap;gap:.6rem 1.4rem;margin-top:.6rem}
+.edbits label.cap{display:block;font-size:.72rem;color:var(--dim);margin-bottom:.15rem}
+/* Flex with a fixed width per box rather than a grid: in a grid the gap
+   between the two nibbles came out of the fifth box's own width. */
+.bitbar{display:inline-flex;gap:.2rem}
+.bitbar button:nth-child(5){margin-left:.45rem}
+.bitbar button{flex:none;width:2rem;box-sizing:border-box;
+               display:flex;flex-direction:column;align-items:center;padding:.12rem 0 .18rem;
+               border:1px solid var(--line);border-radius:.3rem;background:var(--bg);color:var(--fg);
+               font:13px/1.2 ui-monospace,Menlo,monospace;cursor:pointer}
+.bitbar button small{font-size:9px;color:var(--dim)}
+.bitbar button.on{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.bitbar button.on small{color:var(--bg);opacity:.8}
+.bitbar button.anchor{outline:2px dashed var(--accent);outline-offset:1px}
+.bithint{font-size:.72rem;color:var(--dim);max-width:22rem}
+.bithint.warn{color:var(--warn)}
+.edpreview .bsel{color:var(--accent);font-weight:750}
 .edvalslabel{margin-top:.7rem;font-size:.72rem;color:var(--dim)}
 .edvals{margin-top:.6rem;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
 .edvalslabel + .edvals{margin-top:.25rem}
@@ -3695,11 +3716,11 @@ const EXTRACT_OPS = [
   ['i16le', 'Two bytes, signed, low first (i16le)',
                                                 '−32768 to 32767. That byte and the one after it as '
                                               + 'a single signed number, smaller half first.'],
-  ['bit',   'One bit (bit)',                    'true or false. A single bit of that byte; which bit '
-                                              + 'is set in the profile, not here.'],
-  ['bits',  'Part of a byte (bits)',            'A run of bits inside that byte, shifted down and '
-                                              + 'masked. The shift and mask are set in the profile, '
-                                              + 'not here, so the range depends on the mask.'],
+  ['bit',   'One bit (bit)',                    'On or off. A single bit of that byte, picked in the '
+                                              + 'row of bits below.'],
+  ['bits',  'Part of a byte (bits)',            'A number from a run of bits inside that byte, picked '
+                                              + 'in the row of bits below -- bits 4 to 6, say, read '
+                                              + 'as 0 to 7.'],
 ];
 const opOptions = cur => EXTRACT_OPS.map(([v, label]) =>
   `<option value="${v}"${v === cur ? ' selected' : ''}>${label}</option>`).join('');
@@ -4220,6 +4241,72 @@ function entityEditor(e, pay){
   wrap.appendChild(row);
   wrap.appendChild(removeButton(e));
 
+  /* Which bits a bit operation reads. `bit` takes one; `bits` a run, stored
+     the way the firmware reads it -- shifted down by the lowest bit, masked to
+     the run's width. A run is picked with two clicks, one on each end. */
+  const bitsBox = document.createElement('div');
+  bitsBox.className = 'edbits';
+  wrap.appendChild(bitsBox);
+  let anchor = null;
+
+  const drawBits = () => {
+    const ex = e.extract;
+    if(ex.op !== 'bit' && ex.op !== 'bits'){ bitsBox.hidden = true; bitsBox.innerHTML = ''; return; }
+    bitsBox.hidden = false;
+    const at = ex.at | 0;
+    const cur = pay && at < pay.length ? pay[at] : null;
+    const shift = ex.shift | 0;
+    const mask = ex.mask === undefined ? 0xFF : ex.mask;
+    /* A mask that is not one unbroken run from bit 0 -- 0b101, say -- cannot
+       be drawn as a run. It is shown bit by bit and left as it is until a bit
+       is picked. */
+    const run = mask > 0 && (mask & (mask + 1)) === 0;
+    const picked = i => ex.op === 'bit' ? i === (ex.bit | 0)
+                                        : i >= shift && ((mask >> (i - shift)) & 1) === 1;
+
+    bitsBox.innerHTML =
+        `<div><label class="cap">${ex.op === 'bit' ? 'Bit' : 'Bits'}</label><div class="bitbar">`
+      + [7, 6, 5, 4, 3, 2, 1, 0].map(i =>
+          `<button type="button" data-bit="${i}" class="${picked(i) ? 'on' : ''}${anchor === i ? ' anchor' : ''}"`
+          + ` title="bit ${i}${cur === null ? '' : ' — now ' + ((cur >> i) & 1)}">`
+          + `${cur === null ? '·' : (cur >> i) & 1}<small>${i}</small></button>`).join('')
+      + `</div></div>`
+      + (ex.op === 'bit'
+          ? `<label class="swrow"><span class="sw"><input type="checkbox" class="inv"${ex.invert ? ' checked' : ''}>`
+            + `<span></span></span><span class="swtext">Inverted<small>on while the bit is 0</small></span></label>`
+          : '')
+      + `<span class="bithint${run ? '' : ' warn'}">`
+      + (ex.op === 'bit'
+          ? `Reads bit ${ex.bit | 0}. Bit 0 is the rightmost, as in binary.`
+          : !run
+            ? `The profile's mask ${codeText(mask, 'u8')} is not one run of bits; it is kept as it is until you pick bits here.`
+          : anchor !== null
+            ? `Now click the other end of the run.`
+            : (() => {
+                const hi = Math.min(7, shift + Math.log2(mask + 1) - 1);
+                return `Reads bits ${shift} to ${hi} as a number from 0 to ${(1 << (hi - shift + 1)) - 1}. `
+                     + `Click one end of a run, then the other.`;
+              })())
+      + `</span>`;
+
+    for(const b of bitsBox.querySelectorAll('.bitbar button')) b.onclick = () => {
+      const i = Number(b.dataset.bit);
+      if(ex.op === 'bit'){ ex.bit = i; }
+      else if(anchor === null){ anchor = i; ex.shift = i; ex.mask = 1; }
+      else {
+        const lo = Math.min(anchor, i), hi = Math.max(anchor, i);
+        ex.shift = lo; ex.mask = (1 << (hi - lo + 1)) - 1;
+        anchor = null;
+      }
+      markDirty(); drawBits(); drawPreview();
+    };
+    const inv = bitsBox.querySelector('.inv');
+    if(inv) inv.onchange = () => {
+      if(inv.checked) ex.invert = true; else delete ex.invert;
+      markDirty(); drawPreview();
+    };
+  };
+
   /* Value table. A profile can carry any transform chain, but the editor owns
      just the one lookup -- the rest are left untouched so opening the editor
      never quietly discards what it does not render. */
@@ -4334,12 +4421,27 @@ function entityEditor(e, pay){
       preview.innerHTML = `payload is only ${pay.length} bytes — <b>nothing to read at byte ${e.extract.at | 0}</b>`;
       return;
     }
-    const held = (readingById[e.id] || {}).value;
-    const out = evalTransforms(raw, e.transforms, held);
+    /* What "hold" falls back on: the device's current reading, but only one it
+       actually has -- an empty or stale reading is no value to hold. */
+    const rd = readingById[e.id];
+    const held = rd && rd.available && rd.value !== '' ? rd.value : undefined;
+    const res = evalTransforms(raw, e.transforms, held);
+    const out = res === null || valueText(res) === '' ? null : res;
+    const ex = e.extract, b = pay[ex.at | 0] ?? 0;
+    /* For a bit operation the byte is spelled in binary whatever the chosen
+       format, with the bits it reads marked -- that is the one thing to check. */
+    let byte = byteHtml(b);
+    if(ex.op === 'bit' || ex.op === 'bits'){
+      const shift = ex.shift | 0, mask = ex.mask === undefined ? 0xFF : ex.mask;
+      const sel = i => ex.op === 'bit' ? i === (ex.bit | 0) : i >= shift && ((mask >> (i - shift)) & 1) === 1;
+      byte = [7, 6, 5, 4, 3, 2, 1, 0].map(i => (i === 3 ? ' ' : '')
+        + (sel(i) ? `<span class="bsel">${(b >> i) & 1}</span>` : (b >> i) & 1)).join('');
+    }
     preview.className = 'edpreview' + (out === null ? ' miss' : '');
-    preview.innerHTML = `byte ${e.extract.at | 0} = ${byteHtml(pay[e.extract.at | 0] ?? 0)}`
-      + ` → raw ${esc(typeof raw === 'number' ? codeText(raw, e.extract.op) : String(raw))} → `
-      + (out === null ? '<b>no value</b>' : `<b>${esc(String(out))}</b>`);
+    /* The result as the device shows it: On and Off rather than true and false. */
+    preview.innerHTML = `byte ${ex.at | 0} = ${byte}`
+      + ` → raw ${esc(typeof raw === 'number' ? codeText(raw, ex.op) : valueText(raw))} → `
+      + (out === null ? '<b>no value</b>' : `<b>${esc(valueText(out))}</b>`);
   };
 
   row.querySelector('.n').oninput = ev => { e.name = ev.target.value; markDirty(); };
@@ -4352,17 +4454,37 @@ function entityEditor(e, pay){
     markDirty();
     if(e.kind === 'hidden') renderEditor();
   };
-  row.querySelector('.b').oninput = ev => { e.extract.at = Number(ev.target.value) | 0; markDirty(); drawPreview(); };
+  /* min_len has to cover the run the operation reads, or the firmware skips
+     the entity on every short frame without saying why -- so it follows both
+     the byte and the operation. */
+  const fitLen = () => { e.match.min_len = (e.extract.at | 0) + opWidth(e.extract.op); };
+  row.querySelector('.b').oninput = ev => {
+    e.extract.at = Number(ev.target.value) | 0;
+    fitLen(); markDirty(); drawBits(); drawPreview();
+  };
   row.querySelector('.o').onchange = ev => {
-    e.extract.op = ev.target.value;
-    ev.target.title = opHint(e.extract.op);
-    /* min_len has to cover the run the operation reads, or the firmware skips
-       the entity on every short frame without saying why. */
-    e.match.min_len = (e.extract.at | 0) + opWidth(e.extract.op);
-    markDirty(); drawPreview();
+    const ex = e.extract, from = ex.op;
+    ex.op = ev.target.value;
+    ev.target.title = opHint(ex.op);
+    /* Each op keeps only the fields it reads, so a profile does not carry a
+       stale shift for an op that ignores it. Going between the two bit ops
+       keeps the place: bit 3 becomes the run of bit 3, and back. */
+    if(ex.op === 'bit'){
+      if(from === 'bits') ex.bit = ex.shift | 0;
+      ex.bit = ex.bit | 0;
+      delete ex.shift; delete ex.mask;
+    } else if(ex.op === 'bits'){
+      ex.shift = from === 'bit' ? ex.bit | 0 : ex.shift | 0;
+      if(from !== 'bits') ex.mask = 1;
+      delete ex.bit; delete ex.invert;
+    } else {
+      delete ex.bit; delete ex.invert; delete ex.shift; delete ex.mask;
+    }
+    anchor = null;
+    fitLen(); markDirty(); drawBits(); drawPreview();
   };
 
-  drawVals(); drawPreview();
+  drawBits(); drawVals(); drawPreview();
   return wrap;
 }
 
