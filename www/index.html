@@ -129,6 +129,11 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
 .fr>span.f-pay{white-space:normal}
 .by{display:inline-block;white-space:pre;margin-right:.6ch}
 .by:last-child{margin-right:0}
+/* A byte that changed since the frame it is compared with -- in binary, each
+   bit that flipped. Tinted rather than only coloured, so it is found at a
+   glance in a column of identical rows. */
+.by.ch,.by .cb{color:var(--warn);font-weight:750;border-radius:.2rem;
+               background:color-mix(in srgb,var(--warn) 18%,transparent)}
 /* Binary is read a nibble at a time -- the same split hex makes -- so the two
    halves of a byte are set slightly apart, without a character that would
    end up in a copied payload. */
@@ -431,6 +436,33 @@ dialog p.dsub{margin:0 0 1rem;font-size:.82rem;color:var(--dim)}
 #fdlg{max-width:min(36rem,calc(100vw - 2rem))}
 #fdlg .fdet{margin:0;padding:0;background:transparent;border-left:0;font-size:12px}
 #fdlg h3{font-family:ui-monospace,Menlo,monospace}
+/* Two frames side by side need more room still: seven bytes in binary, twice. */
+#fdlg.cmp{max-width:min(56rem,calc(100vw - 2rem))}
+#fdlg.cmp #fdlg-prev,#fdlg.cmp #fdlg-pick{display:none}
+
+/* Every spelling of the two payloads, one row each, older above newer, byte
+   for byte in columns -- so a change reads straight down a column. */
+.cmpw{overflow-x:auto;margin-top:.6rem}
+.cmpt{border-collapse:collapse;font:12px/1.5 ui-monospace,Menlo,monospace}
+.cmpt th,.cmpt td{padding:.1rem .45rem;text-align:left;white-space:nowrap}
+.cmpt thead th{color:var(--dim);font-weight:500;font-size:10px}
+.cmpt tbody th{color:var(--dim);font-weight:500;padding-left:0}
+.cmpt tbody th b{color:var(--fg);font-weight:650;margin-right:.3rem}
+.cmpt tr.gap td,.cmpt tr.gap th{padding-top:.5rem}
+.cmpt td.ch{background:color-mix(in srgb,var(--warn) 8%,transparent)}
+.cmpt td.none{color:var(--dim)}
+.cmpmean{margin-top:.7rem;line-height:1.6}
+.cmpmean b{color:var(--fg)}
+.cmpmean .was{color:var(--dim);text-decoration:line-through}
+
+/* Shown while the reader picks the second frame of a comparison. */
+.pickbar{display:flex;align-items:center;gap:.6rem;margin:.4rem 0;padding:.45rem .7rem;
+         border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:.5rem;
+         background:color-mix(in srgb,var(--accent) 10%,transparent);font-size:.82rem}
+.pickbar[hidden]{display:none}
+.pickbar span{flex:1}
+.pickbar .btn{padding:.15rem .6rem;font-size:.78rem}
+#mon.picking .fr{cursor:crosshair}
 .warn{font-size:.78rem;border-radius:.5rem;padding:.55rem .7rem;margin-top:.8rem;
       border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line));
       background:color-mix(in srgb,var(--warn) 10%,transparent)}
@@ -500,6 +532,10 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
         <span class="swtext">Repeated frames<small>a frame identical to the one shown before it</small></span>
       </label>
       <label class="swrow">
+        <span class="sw"><input type="checkbox" id="f-chg" checked><span></span></span>
+        <span class="swtext">Changes<small>bytes that differ from the same frame before</small></span>
+      </label>
+      <label class="swrow">
         <span class="sw"><input type="checkbox" id="f-cols"><span></span></span>
         <span class="swtext">Length &amp; checksum<small>the structural columns</small></span>
       </label>
@@ -507,6 +543,11 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
         <span class="seg numfmt" role="group" aria-label="Data bytes as"></span>
         <span class="swtext">Data bytes as<small>here and in the profile editor</small></span>
       </span>
+    </div>
+
+    <div class="pickbar" id="pickbar" hidden>
+      <span id="picktext"></span>
+      <button type="button" class="btn ghost" id="pickcancel">Cancel</button>
     </div>
 
     <div id="mon" class="compact">
@@ -1115,6 +1156,10 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
     <p class="dsub" id="fdlgsub"></p>
     <div class="fdet" id="fdlgbody"></div>
     <div class="row" style="margin-top:1rem">
+      <button type="button" class="btn ghost" id="fdlg-prev"
+              title="The last frame before this one with the same target and command, and different bytes">Compare with previous change</button>
+      <button type="button" class="btn ghost" id="fdlg-pick"
+              title="Close this and click the frame to compare with in the log">Compare with…</button>
       <button class="btn ghost" value="close">Close</button>
     </div>
   </form>
@@ -1678,7 +1723,7 @@ const lastPayload = {};
    the active profile carries a "hidden" marker for it -- optionally down to a
    specific payload. There is no automatic heartbeat detection any more: what the
    profile does not mark is always shown. */
-const filters = { dest: '', cmd: '', pay: '', hideHidden: true, hideRepeats: false };
+const filters = { dest: '', cmd: '', pay: '', hideHidden: true, hideRepeats: false, showChanges: true };
 
 /* ---- Data bytes as hex, decimal or binary ----
 
@@ -1696,17 +1741,26 @@ let numFmt = 'hex';
 try{ const s = localStorage.getItem('numFmt'); if(NUM_FMTS.some(([v]) => v === s)) numFmt = s; }catch(e){}
 const numFmtName = () => NUM_FMTS.find(([v]) => v === numFmt)[2];
 
-/* One byte as HTML, the same width whatever its value so the bytes line up. */
-function byteHtml(b){
-  if(numFmt === 'dec') return `<span class="by">${String(b).padStart(3)}</span>`;
-  if(numFmt === 'bin'){
+/* One byte as HTML, the same width whatever its value so the bytes line up.
+   `p` is the byte it is compared with: a changed byte is marked, and in binary
+   only the bits that flipped. null means there was no byte here before;
+   undefined, that nothing is compared. */
+function byteHtml(b, p, fmt = numFmt){
+  const ch = p !== undefined && p !== b;
+  if(fmt === 'bin'){
     const s = b.toString(2).padStart(8, '0');
-    return `<span class="by">${s.slice(0, 4)}<span class="nb"></span>${s.slice(4)}</span>`;
+    const q = typeof p === 'number' ? p.toString(2).padStart(8, '0') : null;
+    const bit = i => ch && (q === null || q[i] !== s[i]) ? `<span class="cb">${s[i]}</span>` : s[i];
+    const half = (from, to) => [...s.slice(from, to)].map((_, i) => bit(from + i)).join('');
+    return `<span class="by">${half(0, 4)}<span class="nb"></span>${half(4, 8)}</span>`;
   }
-  return `<span class="by">${hx(b)}</span>`;
+  const text = fmt === 'dec' ? String(b).padStart(3) : hx(b);
+  return `<span class="by${ch ? ' ch' : ''}">${text}</span>`;
 }
-/* Separated by real spaces, so a copied payload still reads as bytes. */
-const bytesHtml = bytes => bytes.map(byteHtml).join(' ');
+/* Separated by real spaces, so a copied payload still reads as bytes. With
+   `prev`, the bytes that differ from it are marked. */
+const bytesHtml = (bytes, prev, fmt) =>
+  bytes.map((b, i) => byteHtml(b, prev ? (i < prev.length ? prev[i] : null) : undefined, fmt)).join(' ');
 
 /* Whether a payload contains the filter's bytes. Hex keeps matching anywhere
    with the spaces ignored, as it always did. Decimal compares whole bytes in a
@@ -2508,6 +2562,10 @@ async function updateRecInfo(){
 
 /* The payload as the screen spells it: data bytes after the command, spaced. */
 const payOf = r => (r.x.slice(4).match(/../g) || []).join(' ');
+/* A record's data bytes, and those of the payload it replaced (recordOf). */
+const bytesOf = hex => (hex.match(/../g) || []).map(h => parseInt(h, 16));
+const payBytes = r => bytesOf(r.x.slice(4));
+const pvOf = r => r.pv === undefined ? undefined : bytesOf(r.pv);
 
 /* What a live frame becomes in the recording. Also the place for what only
    makes sense as frames arrive: the newest payload per frame for the editor's
@@ -2521,6 +2579,7 @@ function recordOf(m){
      command indexes instead of sorting below every real command. */
   const c = bytes.length >= 2 ? (bytes[0] << 8 | bytes[1]) : -1;
   const key = c < 0 ? '' : `${hx(d)}.${hx(c >> 8)}${hx(c & 0xff)}`;
+  const prevPay = key ? lastPayload[key] : undefined;
   if(key){ lastPayload[key] = bytes.slice(2); seenKeys.add(key); }
 
   /* What the profile makes of the frame is not stored: it is decoded from the
@@ -2530,7 +2589,16 @@ function recordOf(m){
               x: m.x.toUpperCase() };
   const prev = lastSeen.get(key);
   lastSeen.set(key, m.ts);
-  if(prev !== undefined && prev <= m.ts) r.iv = m.ts - prev;
+  if(prev !== undefined && prev <= m.ts){
+    r.iv = m.ts - prev;
+    /* The payload this frame replaced, kept only when it differs: that is what
+       lets a row mark its changed bytes wherever it is drawn -- filtered,
+       paged in from three days back -- without looking for its predecessor.
+       Repeats, the bulk of the traffic, carry nothing extra. Not across a
+       restart, where the stamps start over and the order is unknown. */
+    const pv = prevPay ? prevPay.map(hx).join('') : null;
+    if(pv !== null && pv !== r.x.slice(4)) r.pv = pv;
+  }
   return r;
 }
 
@@ -2574,7 +2642,8 @@ function rowFor(r){
     + `<span class="f-len c-len">${hx(r.l)}</span>`
     + `<span class="f-dest">${hx(dest)}</span>`
     + `<span class="f-cmd">${cmd === null ? '·· ··' : hx(bytes[0]) + ' ' + hx(bytes[1])}</span>`
-    + `<span class="f-pay">${bytesHtml(pay) || '—'}${whole ? '' : ' …'}</span>`
+    + `<span class="f-pay">${bytesHtml(pay, filters.showChanges ? pvOf(r) : undefined) || '—'}`
+      + `${whole ? '' : ' …'}</span>`
     + `<span class="f-crc c-crc">${crc === null ? '…' : hx(crc >> 8) + hx(crc & 0xff)}</span>`
     + `<span class="f-mean${known.length ? '' : ' none'}">`
       + `${hidden ? `<span class="hbtag">${esc(marker.name || 'hidden')}</span>` : ''}`
@@ -2585,6 +2654,8 @@ function rowFor(r){
   if(r.ack !== undefined) ackBadge(item, r.ack);
 
   row.onclick = () => {
+    /* While a comparison waits for its second frame, a click picks it. */
+    if(pickFor){ const a = pickFor; endPick(); openCompare(a, r); return; }
     let h = `<b>Received</b> ${dateOf(when)} ${clockOf(when)}`
           + ` <i>(device uptime ${(r.ts / 1000).toFixed(3)} s)</i><br>`
           + `<b>LL</b> ${hx(r.l)} — ${r.l} data bytes, ${r.l + 4} on the wire<br>`
@@ -2642,9 +2713,143 @@ function rowFor(r){
       || (known.length ? 'Read by this profile, but nothing in this frame decodes.'
                        : 'No profile explains this frame.');
     $('fdlgbody').innerHTML = h;
+    $('fdlg').classList.remove('cmp');
+    $('fdlg-prev').disabled = cmd === null;
+    $('fdlg-prev').textContent = 'Compare with previous change';
+    $('fdlg-prev').onclick = () => comparePrevious(r);
+    $('fdlg-pick').onclick = () => startPick(r);
     $('fdlg').showModal();
   };
   return item;
+}
+
+/* ---- Comparing two frames ----
+
+   A button press usually changes a byte or a single bit, buried in a frame the
+   appliance sends many times a second. The comparison puts two frames byte for
+   byte in columns, in hex, decimal and binary at once, and marks what differs
+   down to the bit -- and what the profile makes of the difference. */
+
+let pickFor = null;
+
+function startPick(r){
+  $('fdlg').close();
+  pickFor = r;
+  $('mon').classList.add('picking');
+  $('picktext').textContent = `Click the frame to compare with ${frameName(r)} `
+    + `from ${clockOf(new Date(r.at))}.`;
+  $('pickbar').hidden = false;
+}
+function endPick(){
+  pickFor = null;
+  $('mon').classList.remove('picking');
+  $('pickbar').hidden = true;
+}
+$('pickcancel').onclick = endPick;
+addEventListener('keydown', ev => { if(ev.key === 'Escape' && pickFor) endPick(); });
+
+const frameName = r => r.c < 0 ? hx(r.d) : `${hx(r.d)}.${hx(r.c >> 8)}${hx(r.c & 0xff)}`;
+
+/* The last frame before `r` with the same target and command whose bytes
+   differ, from the whole recording. A frame repeated unchanged for hours sits
+   in front of it, so the walk is bounded: past that it reports nothing rather
+   than keep the page busy. */
+const PREV_SCAN_MAX = 200000;
+async function previousChange(r){
+  const differs = o => o.x !== r.x || o.l !== r.l;
+  if(!db){
+    let i = memRecs.indexOf(r);
+    if(i < 0) i = memRecs.findIndex(o => o.boot === r.boot && o.ts === r.ts);
+    for(let j = i - 1, n = 0; j >= 0 && n < PREV_SCAN_MAX; j--, n++){
+      const o = memRecs[j];
+      if(o.d === r.d && o.c === r.c && differs(o)) return o;
+    }
+    return null;
+  }
+  await flushRecording();
+  return new Promise(resolve => {
+    let q;
+    try{
+      q = db.transaction('frames').objectStore('frames').index('frame')
+            .openCursor(IDBKeyRange.bound([r.d, r.c, -Infinity], [r.d, r.c, r.at]), 'prev');
+    }catch(e){ resolve(null); return; }
+    let n = 0;
+    q.onsuccess = () => {
+      const cur = q.result;
+      if(!cur || ++n > PREV_SCAN_MAX) return resolve(null);
+      const o = cur.value;
+      /* Frames stamped the same millisecond: only those stored before `r`. */
+      const before = o.at < r.at || indexedDB.cmp([o.boot, o.ts], [r.boot, r.ts]) < 0;
+      if(before && differs(o)) return resolve(o);
+      cur.continue();
+    };
+    q.onerror = () => resolve(null);
+  });
+}
+
+async function comparePrevious(r){
+  const btn = $('fdlg-prev');
+  btn.disabled = true;
+  btn.textContent = 'Searching…';
+  const o = await previousChange(r);
+  btn.textContent = 'Compare with previous change';
+  if(o){ openCompare(o, r); return; }
+  /* Said in the dialog rather than by a button that silently stays put. */
+  btn.textContent = 'No earlier change recorded';
+}
+
+function openCompare(a, b){
+  if(b.at < a.at || (b.at === a.at && b.ts < a.ts)) [a, b] = [b, a];
+  const pa = payBytes(a), pb = payBytes(b);
+  const n = Math.max(pa.length, pb.length);
+  const same = a.d === b.d && a.c === b.c;
+  const changed = [...Array(n).keys()].filter(i => pa[i] !== pb[i]);
+
+  const cells = (bytes, other, fmt) => [...Array(n).keys()].map(i => {
+    if(i >= bytes.length) return '<td class="none">—</td>';
+    const o = i < other.length ? other[i] : null;
+    return `<td${pa[i] !== pb[i] ? ' class="ch"' : ''}>${byteHtml(bytes[i], o, fmt)}</td>`;
+  }).join('');
+  const label = (which, r, fmt) =>
+    `<th><b>${which}</b>${fmt}${same ? '' : ' · ' + frameName(r)}</th>`;
+  const rows = ['hex', 'dec', 'bin'].map((fmt, k) =>
+      `<tr${k ? ' class="gap"' : ''}>${label('A', a, fmt)}${cells(pa, pb, fmt)}</tr>`
+    + `<tr>${label('B', b, fmt)}${cells(pb, pa, fmt)}</tr>`).join('');
+  const head = `<tr><th></th>${[...Array(n).keys()].map(i => `<th>byte ${i}</th>`).join('')}</tr>`;
+
+  const ta = new Date(a.at), tb = new Date(b.at);
+  /* Seconds to the millisecond for the gap a button press leaves; beyond a
+     minute nobody wants 190525.843 s. */
+  const s = (b.at - a.at) / 1000;
+  const gap = s < 60 ? `${s.toFixed(3)} s`
+            : s < 3600 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`
+            : s < 86400 ? `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} min`
+            : `${Math.floor(s / 86400)} d ${Math.round(s % 86400 / 3600)} h`;
+  let h = `<b>A</b> ${dateOf(ta)} ${clockOf(ta)}<br>`
+        + `<b>B</b> ${dateOf(tb)} ${clockOf(tb)} <i>(${gap} later)</i><br>`
+        + (changed.length
+            ? `${changed.length} of ${n} bytes differ: ${changed.map(i => `byte ${i}`).join(', ')}`
+            : 'The payloads are identical.')
+        + `<div class="cmpw"><table class="cmpt"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+
+  /* What the profile reads differently. Only for the same frame: across two
+     frames the same entity is not read twice. */
+  if(same && a.c >= 0){
+    const va = decodeFrame(a.d, a.c, pa), vb = decodeFrame(b.d, b.c, pb);
+    const diff = entitiesFor(a.d, a.c).filter(e => e.kind !== 'hidden' && va.get(e.id) !== vb.get(e.id));
+    h += `<div class="cmpmean">` + (diff.length
+      ? diff.map(e => `<b>${esc(e.name)}</b> <span class="was">${esc(va.get(e.id) ?? '—')}</span>`
+                    + ` → ${esc(vb.get(e.id) ?? '—')}`).join('<br>')
+      : entitiesFor(a.d, a.c).some(e => e.kind !== 'hidden')
+        ? 'The profile reads the same from both.'
+        : 'No profile explains this frame.') + `</div>`;
+  }
+
+  $('fdlgtitle').textContent = same ? `Compare ${frameName(a)}` : `Compare ${frameName(a)} with ${frameName(b)}`;
+  $('fdlgsub').textContent = 'A is the older frame. Marked: bytes that differ, and in binary the bits that flipped.';
+  $('fdlgbody').innerHTML = h;
+  $('fdlg').classList.add('cmp');
+  if(!$('fdlg').open) $('fdlg').showModal();
 }
 
 /* Low nibble 0x0A is acceptance; anything else is a node that received the
@@ -3005,6 +3210,7 @@ for(const [id, key] of [['f-dest','dest'], ['f-cmd','cmd'], ['f-pay','pay']]){
    whose label is a negation makes the reader translate before deciding. */
 $('f-hb').onchange = ev => { filters.hideHidden = !ev.target.checked; scheduleRebuild(); };
 $('f-rep').onchange = ev => { filters.hideRepeats = !ev.target.checked; scheduleRebuild(); };
+$('f-chg').onchange = ev => { filters.showChanges = ev.target.checked; scheduleRebuild(); };
 $('f-cols').onchange = ev => { $('mon').classList.toggle('compact', !ev.target.checked); };
 drawNumFmt();
 
