@@ -355,10 +355,19 @@ button.danger:hover{background:color-mix(in srgb,var(--err) 12%,transparent);fil
 .sw input:disabled+span{opacity:.45}
 
 /* A row of switches under a heading, for options that belong together. */
-.swgroup{margin:.6rem 0 .55rem}
-.swgroup h3{margin:0 0 .4rem;font-size:.74rem;font-weight:600;letter-spacing:.06em;
+/* Laid out on a grid rather than flowed: switches with descriptions of
+   different lengths wrapped wherever they ran out of room and ended up
+   staggered. In columns, every switch and every label starts on the same line
+   as the ones above it. A row that is not a switch spans the whole width. */
+.swgroup{margin:.6rem 0 .55rem;display:grid;gap:.6rem 1.5rem;align-items:start;
+         grid-template-columns:repeat(auto-fill,minmax(18rem,1fr))}
+.swgroup h3{grid-column:1 / -1;margin:0;font-size:.74rem;font-weight:600;letter-spacing:.06em;
             text-transform:uppercase;color:var(--dim)}
-.swrow{display:inline-flex;align-items:center;gap:.55rem;margin:0 1.1rem .35rem 0;cursor:pointer}
+/* The control sits level with the title, not with the middle of a
+   description that may run to two lines. */
+.swrow{display:flex;align-items:flex-start;gap:.55rem;cursor:pointer}
+.swrow>.sw,.swrow>.seg{flex:none;margin-top:.05rem}
+.swrow.wide{grid-column:1 / -1;cursor:default}
 .swtext{display:block;font-size:.82rem;line-height:1.25}
 .swtext small{display:block;font-size:.72rem;color:var(--dim)}
 
@@ -539,7 +548,7 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
         <span class="sw"><input type="checkbox" id="f-cols"><span></span></span>
         <span class="swtext">Length &amp; checksum<small>the structural columns</small></span>
       </label>
-      <span class="swrow">
+      <span class="swrow wide">
         <span class="seg numfmt" role="group" aria-label="Data bytes as"></span>
         <span class="swtext">Data bytes as<small>here and in the profile editor</small></span>
       </span>
@@ -927,7 +936,7 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
     </div>
 
     <div class="swgroup">
-      <span class="swrow">
+      <span class="swrow wide">
         <span class="seg numfmt" role="group" aria-label="Data bytes as"></span>
         <span class="swtext">Data bytes and codes as<small>the profile stores codes in
           decimal either way</small></span>
