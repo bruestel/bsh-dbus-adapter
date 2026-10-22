@@ -1298,6 +1298,10 @@ async function refreshAppliance(){
        profile that loaded or changed means drawing the monitor again. */
     const sig = JSON.stringify(layout);
     if(sig !== layoutSig){ layoutSig = sig; scheduleRebuild(); }
+    /* The decoding rules come from the profile's source, which only changes
+       with the profile -- or, edited in place, with what it reads. */
+    const dsig = `${a.loaded ? a.id : ''}|${sig}`;
+    if(dsig !== decodeSig){ decodeSig = dsig; loadDecoders(); }
     readingById = {};
     for(const r of rd) readingById[r.id] = r;
 
@@ -1680,10 +1684,319 @@ function hiddenMarkerFor(dest, cmd, payHex){
    reads -- a 16-bit reading owns two of them, not just the one it starts at. */
 const covers = (e, i) => i >= e.byte && i < e.byte + Math.max(e.width, 1);
 
-function valueOf(e){
-  const r = readingById[e.id];
-  if(!r || !r.available) return null;
-  return r.value + (r.unit ? ' ' + r.unit : '');
+/* ---- Decoding a frame from its own bytes ----
+
+   The meaning column used to show the device's current reading for each entity,
+   fetched every three seconds. A frame drawn as it arrived was therefore
+   described by the reading from before it, and a frame scrolled back to by
+   whatever the appliance says now. What a row has to say is what that frame
+   carries, so the browser decodes it: the active profile's source, evaluated by
+   the rules below.
+
+   They mirror the firmware's Extract, Transform and Value code
+   (components/dbus2_decoder) step for step, including its parsing defaults,
+   because a value here that the device would not produce is worse than none.
+   What they leave out on purpose is time: throttle, debounce, expiry and the
+   countdown decide when a reading is published, not what a frame says. Hold has
+   no previous frame to fall back on here, so a lookup that would hold reports
+   nothing -- the frame itself said nothing new. */
+
+/* dest.cmd -> the profile's decoding entities for that frame, from its source.
+   `decodeSig` names the profile and layout the map was built for. */
+let decodeByFrame = {}, decodeSig = null;
+
+/* cJSON's as_int: a number truncated, or a string strtol reads whole in base 0
+   -- "0x14" as hex, "017" as octal. Anything else is no integer at all. */
+function asInt(v){
+  if(typeof v === 'number') return Math.trunc(v);
+  if(typeof v !== 'string') return null;
+  const s = v.trimStart();
+  if(/^[+-]?0x[0-9a-f]+$/i.test(s)) return parseInt(s, 16);
+  if(/^[+-]?0[0-7]*$/.test(s)) return parseInt(s, 8);
+  if(/^[+-]?[0-9]+$/.test(s)) return parseInt(s, 10);
+  return null;
+}
+const intOr = (o, k, fb) => { const n = asInt((o || {})[k]); return n === null ? fb : n; };
+/* json_to_value: a bool, number or string, and anything else no value. */
+const jsonValue = v => typeof v === 'boolean' || typeof v === 'number' || typeof v === 'string' ? v : null;
+const asNumber = v => typeof v === 'number' ? v : v === true ? 1 : 0;
+const asBool = v => typeof v === 'boolean' ? v : typeof v === 'number' ? v !== 0
+                  : typeof v === 'string' ? v !== '' : false;
+
+/* toFixed with printf's rounding. A value exactly halfway, such as 954.5 to
+   no decimals, goes to the even neighbour in C and up in JavaScript -- so 954
+   on the device, 955 here. toFixed(100) spells the double out exactly, which
+   tells a true tie from a value merely close to one. */
+function fixed(x, p){
+  const s = x.toFixed(p);
+  if(Math.abs(x) >= 1e21 || p > 99) return s;
+  const exact = Math.abs(x).toFixed(100);
+  const dot = exact.indexOf('.');
+  if(!/^50*$/.test(exact.slice(dot + 1 + p))) return s;
+  const cut = exact.slice(0, p ? dot + 1 + p : dot);
+  if(Number(cut.slice(-1)) % 2) return s;
+  return (x < 0 ? '-' : '') + cut;
+}
+/* toExponential with the same rounding, by way of fixed(). */
+function expo(x, p){
+  const s = x.toExponential(p);
+  const d = p - Number(s.split('e')[1]);
+  return Math.abs(x) < 1e21 && d >= 0 && d <= 99 ? Number(fixed(x, d)).toExponential(p) : s;
+}
+
+/* printf for the single conversion a profile is allowed (check_format), so a
+   formatted reading comes out character for character as on the device. */
+function cfmt(fmt, arg){
+  return fmt.replace(/%%|%([-+ #0]*)(\d*)(?:\.(\d*))?([diuxXofFeEgGs])/g, (all, fl, w, prec, c) => {
+    if(all === '%%') return '%';
+    const p = prec === undefined ? null : (prec === '' ? 0 : Number(prec));
+    let body, sign = '';
+    if(c === 's'){
+      body = String(arg);
+      if(p !== null) body = body.slice(0, p);
+    } else if('diuxXo'.includes(c)){
+      let n = Math.trunc(asNumber(arg)) | 0;
+      if(c !== 'd' && c !== 'i') n = n >>> 0;
+      if(n < 0){ sign = '-'; n = -n; }
+      body = n.toString(c === 'o' ? 8 : c === 'u' || c === 'd' || c === 'i' ? 10 : 16);
+      if(c === 'X') body = body.toUpperCase();
+      if(p !== null) body = (p === 0 && n === 0) ? '' : body.padStart(p, '0');
+      if(fl.includes('#') && c === 'o' && !body.startsWith('0')) body = '0' + body;
+      /* Carried like a sign, so zero padding goes between it and the digits. */
+      if(fl.includes('#') && n !== 0 && 'xX'.includes(c)) sign = '0' + c;
+    } else {
+      let x = asNumber(arg);
+      if(x < 0 || Object.is(x, -0)){ sign = '-'; x = -x; }
+      const exp = s => s.replace(/e([+-])(\d)$/, 'e$10$2');
+      const lc = c.toLowerCase();
+      if(!Number.isFinite(x)) body = Number.isNaN(x) ? 'nan' : 'inf';
+      else if(lc === 'f') body = fixed(x, p === null ? 6 : p);
+      else if(lc === 'e') body = exp(expo(x, p === null ? 6 : p));
+      else {
+        const P = p === null ? 6 : (p === 0 ? 1 : p);
+        const X = x === 0 ? 0 : Number(expo(x, P - 1).split('e')[1]);
+        body = (P > X && X >= -4) ? fixed(x, P - 1 - X) : exp(expo(x, P - 1));
+        /* %g drops trailing zeros of the fraction, and the point with them. */
+        if(!fl.includes('#')){
+          const [mant, ex] = body.split('e');
+          const cut = mant.includes('.') ? mant.replace(/0+$/, '').replace(/\.$/, '') : mant;
+          body = ex === undefined ? cut : cut + 'e' + ex;
+        }
+      }
+      /* '#' keeps the point even with nothing after it. */
+      if(fl.includes('#') && Number.isFinite(x) && !body.includes('.')){
+        const [mant, ex] = body.split('e');
+        body = ex === undefined ? mant + '.' : mant + '.e' + ex;
+      }
+      if(c !== lc) body = body.toUpperCase();
+    }
+    if(!sign && c !== 's' && !'uxXo'.includes(c)) sign = fl.includes('+') ? '+' : fl.includes(' ') ? ' ' : '';
+    const width = Number(w || 0);
+    const len = sign.length + body.length;
+    if(len >= width) return sign + body;
+    if(fl.includes('-')) return (sign + body).padEnd(width);
+    if(fl.includes('0') && c !== 's' && (p === null || !'diuxXo'.includes(c)))
+      return sign + body.padStart(width - sign.length, '0');
+    return (sign + body).padStart(width);
+  });
+}
+
+/* Value's to_string: On/Off for flags, the fixed decimals when the profile sets
+   them, a whole number without a point, otherwise %g. */
+function valueText(v, decimals = -1){
+  if(typeof v === 'string') return v;
+  if(typeof v === 'boolean') return v ? 'On' : 'Off';
+  if(typeof v === 'number'){
+    if(decimals >= 0) return cfmt(`%.${decimals}f`, v);
+    if(Number.isInteger(v)) return String(v);
+    return cfmt('%g', v);
+  }
+  return '';
+}
+
+const EXTRACT_WIDTH = { u8: 1, i8: 1, bit: 1, bits: 1, mask: 1, eq: 1,
+                        u16be: 2, u16le: 2, i16be: 2, i16le: 2, u24be: 3, u32be: 4 };
+
+/* Extract::eval, on the extract object as the profile writes it. null when the
+   payload is too short -- the firmware skips such entities rather than reading
+   past the end, and a value invented here would be lying. */
+function evalExtract(ex, pay){
+  ex = ex || {};
+  const at = intOr(ex, 'at', 0), len = intOr(ex, 'len', 1);
+  const need = ex.op === 'bytes' || ex.op === 'ascii' ? len
+             : ex.op === 'const' || ex.op === 'len' ? 0 : (EXTRACT_WIDTH[ex.op] || 0);
+  if(need > 0 && at + need > pay.length) return null;
+  const b = i => pay[at + i];
+  const s8 = v => v >= 0x80 ? v - 0x100 : v, s16 = v => v >= 0x8000 ? v - 0x10000 : v;
+  const invert = ex.invert === true;
+  const value = asInt(ex.value) ?? 0;
+  const mask = intOr(ex, 'mask', 0xFF);
+  switch(ex.op){
+    case 'u8':    return b(0);
+    case 'i8':    return s8(b(0));
+    case 'u16be': return b(0) << 8 | b(1);
+    case 'u16le': return b(1) << 8 | b(0);
+    case 'i16be': return s16(b(0) << 8 | b(1));
+    case 'i16le': return s16(b(1) << 8 | b(0));
+    case 'u24be': return b(0) << 16 | b(1) << 8 | b(2);
+    case 'u32be': return (b(0) << 24 | b(1) << 16 | b(2) << 8 | b(3)) >>> 0;
+    case 'bit':   return (((b(0) >> intOr(ex, 'bit', 0)) & 1) !== 0) !== invert;
+    case 'bits':  return (b(0) >> intOr(ex, 'shift', 0)) & mask;
+    case 'mask':  return ((b(0) & mask) !== 0) !== invert;
+    case 'eq':    return (b(0) === (value & 0xFF)) !== invert;
+    case 'const': return value;
+    case 'len':   return pay.length;
+    case 'bytes': return Array.from({length: len}, (_, i) => hx(b(i))).join('');
+    case 'ascii': {
+      let out = '';
+      for(let i = 0; i < len && b(i) >= 0x20 && b(i) <= 0x7E; i++) out += String.fromCharCode(b(i));
+      return out;
+    }
+    default:      return null;
+  }
+}
+
+/* calibrate_linear: piecewise linear, extended with the outer segments' slope,
+   or an exact table lookup. */
+function calibrate(pts, x, exact){
+  if(!pts.length) return x;
+  if(exact){ const hit = pts.find(p => p[0] === x); return hit ? hit[1] : null; }
+  if(pts.length === 1) return pts[0][1];
+  const seg = (a, b, out) => b[0] === a[0] ? out : a[1] + (x - a[0]) * (b[1] - a[1]) / (b[0] - a[0]);
+  if(x <= pts[0][0]) return seg(pts[0], pts[1], pts[0][1]);
+  for(let i = 1; i < pts.length; i++)
+    if(x <= pts[i][0]) return seg(pts[i - 1], pts[i], pts[i][1]);
+  return seg(pts[pts.length - 2], pts[pts.length - 1], pts[pts.length - 1][1]);
+}
+
+/* strtod on a map key: hex as well as decimal, and 0 when nothing reads. */
+function strtod(s){
+  const t = String(s).trimStart();
+  const n = /^[+-]?0x/i.test(t) ? parseInt(t, 16) : parseFloat(t);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+/* Transform::apply in sequence. null when a transform drops the value. `held`
+   is what "hold" resolves to: the entity's last value, which the editor's
+   preview has and a single frame in the monitor does not. */
+function evalTransforms(v, transforms, held){
+  for(const t of transforms || []){
+    if(v === null) return null;
+    const value = typeof t.value === 'number' ? t.value : 1;
+    const x = asNumber(v);
+    switch(t.op){
+      case 'multiply': v = x * value; break;
+      case 'divide':   if(value === 0) return null; v = x / value; break;
+      case 'offset':   v = x + value; break;
+      case 'invert':   v = !asBool(v); break;
+      case 'clamp': {
+        const lo = intOr(t, 'min', 0), hi = intOr(t, 'max', 0);
+        v = x < lo ? lo : hi < x ? hi : x;
+        break;
+      }
+      case 'round': {
+        const f = Math.pow(10, intOr(t, 'decimals', 0));
+        v = Math.sign(x) * Math.round(Math.abs(x) * f) / f;
+        break;
+      }
+      case 'calibrate_linear': {
+        const pts = (Array.isArray(t.datapoints) ? t.datapoints : [])
+          .map(p => [typeof p[0] === 'number' ? p[0] : 0, typeof p[1] === 'number' ? p[1] : 0]);
+        v = calibrate(pts, x, t.method === 'exact');
+        break;
+      }
+      case 'map': {
+        let hit;
+        for(const [k, s] of Object.entries(t.values || {}))
+          if(typeof s === 'string' && strtod(k) === x) hit = s;
+        if(hit !== undefined){ v = hit; break; }
+        if(typeof t.default !== 'string' || !t.default) return null;
+        v = cfmt(t.default, x).slice(0, 63);
+        break;
+      }
+      case 'lookup': {
+        let hit;
+        for(const r of t.rules || []){
+          const ins = (Array.isArray(r.in) ? r.in : [r.in]).map(asInt).filter(n => n !== null);
+          if(ins.includes(x)){ hit = { out: jsonValue(r.out) }; break; }
+        }
+        if(hit){ v = hit.out; break; }
+        if(t.default === 'hold'){ if(held === undefined || held === null) return null; v = held; break; }
+        if(t.default === 'drop' || !('default' in t)) return null;
+        v = jsonValue(t.default);
+        break;
+      }
+      case 'filter_out': {
+        const out = (Array.isArray(t.values) ? t.values : []).map(asInt);
+        if(out.includes(x)) return null;
+        break;
+      }
+      case 'format': {
+        const fmt = typeof t.fmt === 'string' ? t.fmt : '';
+        const m = fmt.replace(/%%/g, '').match(/%[-+ #0]*\d*(?:\.\d*)?([a-zA-Z])/);
+        v = !m ? fmt
+          : cfmt(fmt, m[1] === 's' ? valueText(v) : 'diuxXo'.includes(m[1]) ? Math.trunc(x) : x);
+        v = v.slice(0, 95);
+        break;
+      }
+      default: break;
+    }
+  }
+  return v;
+}
+
+/* Engine::on_frame for one frame and one entity, minus the timing: the length
+   check, the guards, then the extraction and its transforms. */
+function decodeEntity(e, pay){
+  if(pay.length < intOr(e.match, 'min_len', 0)) return null;
+  for(const g of Array.isArray(e.guards) ? e.guards : []){
+    const probe = evalExtract(g.when, pay);
+    if(probe !== null && asNumber(probe) === intOr(g, 'eq', 0)) return jsonValue(g.emit);
+  }
+  const raw = evalExtract(e.extract, pay);
+  return raw === null ? null : evalTransforms(raw, e.transforms, undefined);
+}
+
+/* What one frame says, entity id -> text with unit, for every entity that
+   decoded to something. An entity that reads nothing from this frame is left
+   out: its bare name in the column reads like a value went missing. */
+function decodeFrame(dest, cmd, pay){
+  const out = new Map();
+  if(cmd === null) return out;
+  for(const e of decodeByFrame[`${hx(dest)}.${hx(cmd >> 8)}${hx(cmd & 0xff)}`] || []){
+    const v = decodeEntity(e, pay);
+    const text = v === null ? '' : valueText(v, intOr(e.ha, 'accuracy_decimals', -1));
+    if(text === '') continue;
+    const unit = e.ha && typeof e.ha.unit_of_measurement === 'string' ? e.ha.unit_of_measurement : '';
+    out.set(e.id, text + (unit ? ' ' + unit : ''));
+  }
+  return out;
+}
+
+/* The meaning column for a frame: name = value for what it decoded to, or why
+   there is nothing. Worked out whenever a row or an export is rendered, not
+   stored, so a profile edited later re-reads the whole recording. */
+function summaryOf(dest, cmd, pay){
+  const known = entitiesFor(dest, cmd).filter(e => e.kind !== 'hidden');
+  if(!known.length) return cmd === null ? '' : 'not in this profile';
+  const vals = decodeFrame(dest, cmd, pay);
+  return known.filter(e => vals.has(e.id)).map(e => `${e.name} = ${vals.get(e.id)}`).join(' · ');
+}
+
+/* The active profile's source, indexed by frame. Asked for when the profile or
+   its layout changes; the monitor is drawn again once it is in. */
+async function loadDecoders(){
+  const src = await fetch('/api/v1/profile/source')
+    .then(r => r.ok ? r.json() : null).catch(() => null);
+  const by = {};
+  for(const e of (src && Array.isArray(src.entities)) ? src.entities : []){
+    if(!e || !e.match || e.kind === 'hidden') continue;
+    const d = asInt(e.match.dest), c = asInt(e.match.cmd);
+    if(d === null || c === null) continue;
+    (by[`${hx(d)}.${hx(c >> 8)}${hx(c & 0xff)}`] ||= []).push(e);
+  }
+  decodeByFrame = by;
+  scheduleRebuild();
 }
 
 function wallClock(ts){
@@ -2056,19 +2369,11 @@ function recordOf(m){
   const key = c < 0 ? '' : `${hx(d)}.${hx(c >> 8)}${hx(c & 0xff)}`;
   if(key){ lastPayload[key] = bytes.slice(2); seenKeys.add(key); }
 
-  /* What the profile makes of this frame. Names alone when nothing has been
-     decoded yet, name=value once it has -- the second form is what turns the
-     log from traffic into something you can read. Only what actually decoded
-     to something: an entity with no value yet would leave its bare name
-     standing in the column, which reads like a value went missing. */
-  const known = entitiesFor(d, c < 0 ? null : c).filter(e => e.kind !== 'hidden');
-  const decoded = known.map(e => ({ e, v: valueOf(e) })).filter(x => x.v !== null);
-  const sum = known.length
-    ? decoded.map(x => `${x.e.name} = ${x.v}`).join(' · ')
-    : (c < 0 ? '' : 'not in this profile');
-
+  /* What the profile makes of the frame is not stored: it is decoded from the
+     bytes whenever the frame is drawn or exported (summaryOf). Records made
+     before that still carry a `sum`, which nothing reads. */
   const r = { boot, ts: m.ts, at: wallClock(m.ts).getTime(), l: m.l, d, c,
-              x: m.x.toUpperCase(), sum };
+              x: m.x.toUpperCase() };
   const prev = lastSeen.get(key);
   lastSeen.set(key, m.ts);
   if(prev !== undefined && prev <= m.ts) r.iv = m.ts - prev;
@@ -2076,7 +2381,7 @@ function recordOf(m){
 }
 
 /* The shape the TXT and CSV renderers take. Rendered on the way out rather than
-   stored, so the hidden marker is the profile's current one. */
+   stored, so the hidden marker and the meaning are the profile's current ones. */
 function exportRec(r){
   const bytes = (r.x.match(/../g) || []).map(h => parseInt(h, 16));
   const cmd = r.c < 0 ? null : r.c;
@@ -2085,7 +2390,7 @@ function exportRec(r){
   const marker = hiddenMarkerFor(r.d, cmd, pay);
   return { when: new Date(r.at), ts: r.ts, l: r.l, dest: r.d, cmd, whole,
            crc: whole ? crc16([r.l, r.d, ...bytes]) : null, pay, ack: r.ack,
-           desc: marker ? (marker.name || 'hidden') : r.sum };
+           desc: marker ? (marker.name || 'hidden') : summaryOf(r.d, cmd, bytes.slice(2)) };
 }
 
 function rowFor(r){
@@ -2102,7 +2407,8 @@ function rowFor(r){
   const known = entitiesFor(dest, cmd).filter(e => e.kind !== 'hidden');
   const marker = hiddenMarkerFor(dest, cmd, pay.map(hx).join(' '));
   const hidden = !!marker;
-  const summary = r.sum;
+  const vals = decodeFrame(dest, cmd, pay);
+  const summary = summaryOf(dest, cmd, pay);
 
   const item = document.createElement('div');
   item.dataset.key = r.boot + ':' + r.ts;
@@ -2161,10 +2467,8 @@ function rowFor(r){
            /* Several entities can read the same byte -- a status nibble and a
               flag out of it, say -- so they are all named, not just the first. */
            const on = known.filter(e => covers(e, i));
-           const note = on.map(e => {
-             const v = valueOf(e);
-             return v === null ? esc(e.name) : `${esc(e.name)} = ${esc(v)}`;
-           }).join('<br>');
+           const note = on.map(e => vals.has(e.id)
+             ? `${esc(e.name)} = ${esc(vals.get(e.id))}` : esc(e.name)).join('<br>');
            return `<span class="pb${on.length ? ' used' : ''}"><i>byte ${i}</i> ${hx(b)} `
                 + `<b>${b}</b>${note ? `<u>${note}</u>` : ''}</span>`;
          }).join('') + `</div>`
@@ -2176,7 +2480,7 @@ function rowFor(r){
        would be a lie: nobody reads this frame, or somebody does but has nothing
        to report yet. */
     $('fdlgsub').textContent = summary
-      || (known.length ? 'Read by this profile, but nothing has decoded yet.'
+      || (known.length ? 'Read by this profile, but nothing in this frame decodes.'
                        : 'No profile explains this frame.');
     $('fdlgbody').innerHTML = h;
     $('fdlg').showModal();
@@ -3040,51 +3344,8 @@ const kindHint = cur => (KINDS.find(([v]) => v === cur) || [])[2] || '';
 
 const opWidth = op => op === 'u16be' || op === 'u16le' || op === 'i16be' || op === 'i16le' ? 2 : 1;
 
-/* Mirrors the device's Extract ops for the offered subset. Returns null when
-   the payload is too short -- the firmware skips such entities rather than
-   reading past the end, and a preview that invented a value would be lying. */
-function evalExtract(ex, pay){
-  const at = ex.at | 0;
-  const has = i => i >= 0 && i < pay.length;
-  const sign = (v, bits) => v >= (1 << (bits - 1)) ? v - (1 << bits) : v;
-  switch(ex.op){
-    case 'u8':    return has(at) ? pay[at] : null;
-    case 'i8':    return has(at) ? sign(pay[at], 8) : null;
-    case 'u16be': return has(at) && has(at+1) ? (pay[at] << 8 | pay[at+1]) : null;
-    case 'u16le': return has(at) && has(at+1) ? (pay[at+1] << 8 | pay[at]) : null;
-    case 'i16be': return has(at) && has(at+1) ? sign(pay[at] << 8 | pay[at+1], 16) : null;
-    case 'i16le': return has(at) && has(at+1) ? sign(pay[at+1] << 8 | pay[at], 16) : null;
-    case 'bit':   return has(at) ? Boolean((pay[at] >> (ex.bit | 0)) & 1) !== Boolean(ex.invert) : null;
-    case 'bits':  return has(at) ? (pay[at] >> (ex.shift | 0)) & (ex.mask === undefined ? 0xff : ex.mask) : null;
-    default:      return null;
-  }
-}
-
-/* `held` is what the entity last showed, which is what "hold" resolves to. It
-   is the whole reason the door reads correctly: a frame that carries no door
-   event must leave the previous answer standing rather than overwrite it. */
-function evalTransforms(v, transforms, held){
-  let out = v;
-  for(const tr of transforms || []){
-    if(out === null) return null;
-    if(tr.op === 'map'){
-      const hit = (tr.values || {})[String(out)];
-      out = hit === undefined ? null : hit;
-    } else if(tr.op === 'lookup'){
-      let hit;
-      for(const r of tr.rules || [])
-        if((r.in || []).some(x => Number(x) === Number(out))){ hit = r.out; break; }
-      if(hit !== undefined) out = hit;
-      else if(tr.default === 'hold') return held === undefined ? null : held;
-      else if(tr.default === 'drop' || tr.default === undefined) return null;
-      else out = tr.default;
-    }
-    else if(tr.op === 'multiply') out = out * Number(tr.value ?? 1);
-    else if(tr.op === 'divide')   out = out / Number(tr.value ?? 1);
-    else if(tr.op === 'offset')   out = out + Number(tr.value ?? 0);
-  }
-  return out;
-}
+/* The preview evaluates a rule with evalExtract and evalTransforms, the same
+   code that decodes the monitor's frames. */
 
 const frameKeyOf = e => `${String(e.match.dest).replace(/^0x/i,'').toUpperCase().padStart(2,'0')}`
                       + `.${String(e.match.cmd).replace(/^0x/i,'').toUpperCase().padStart(4,'0')}`;
@@ -4163,6 +4424,9 @@ async function saveDraft(activate){
     if(!r.ok || !j.ok){ say('ed-msg', j.error || 'Rejected by the device.', 'err'); return; }
     draftDirty = false;
     say('ed-msg', activate ? 'Saved and active.' : 'Saved.', 'ok');
+    /* A changed transform leaves the layout as it was, so the monitor would go
+       on decoding by the old rules: ask for the source again. */
+    decodeSig = null;
     loadMine(); refreshAppliance();
   }catch(err){
     say('ed-msg', 'Could not reach the device.', 'err');
