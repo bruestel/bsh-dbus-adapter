@@ -122,6 +122,33 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
 .fr{padding:.12rem .35rem;border-radius:.3rem;cursor:pointer;align-items:baseline}
 .fr:hover{background:var(--surface2)}
 .fr>span{white-space:pre;overflow:hidden;text-overflow:ellipsis}
+/* Data bytes wrap between bytes instead of being cut off: in decimal and above
+   all in binary a payload is several times as wide as in hex, and the bytes cut
+   off are exactly the ones someone is looking for. Every byte is one unbreakable
+   unit of the same width, so the bytes still line up down the log. */
+.fr>span.f-pay{white-space:normal}
+.by{display:inline-block;white-space:pre;margin-right:.6ch}
+.by:last-child{margin-right:0}
+/* Binary is read a nibble at a time -- the same split hex makes -- so the two
+   halves of a byte are set slightly apart, without a character that would
+   end up in a copied payload. */
+.by .nb{display:inline-block;width:.35ch}
+/* Binary takes the room of both: side by side, a seven-byte payload and its
+   meaning each got half a line and neither could be read. So the meaning moves
+   to a line of its own, under the payload, and the payload has the rest of the
+   row. */
+#mon.fmt-bin .fgrid{grid-template-columns:6.4rem 2.4rem 3.6rem 4.6rem minmax(0,1fr) 3rem}
+#mon.fmt-bin.compact .fgrid{grid-template-columns:6.4rem 3.6rem 4.6rem minmax(0,1fr)}
+#mon.fmt-bin .fgrid>:last-child{grid-column:5 / -1}
+#mon.fmt-bin.compact .fgrid>:last-child{grid-column:4 / -1}
+
+/* A choice of one out of a few, side by side. */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:.4rem;overflow:hidden}
+.seg button{background:none;border:0;padding:.2rem .65rem;font-family:inherit;
+            font-size:.75rem;font-weight:600;line-height:1.4;color:var(--dim);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--bg)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .f-len{color:var(--dim)}
 .f-dest{color:var(--accent);font-weight:650}
 .f-cmd{color:var(--warn)}
@@ -146,6 +173,7 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
           background:var(--bg);border:1px solid var(--line);border-radius:.25rem}
 .fdet .pb i{font-style:normal;color:var(--dim)}
 .fdet .pb u{display:block;text-decoration:none;color:var(--ok);font-size:10px}
+.fdet .pb s{display:block;text-decoration:none;color:var(--dim);font-size:10px}
 .fdet .pb.used{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
 
 /* ---- reference tables ---- */
@@ -211,8 +239,8 @@ main{max-width:56rem;margin:0 auto;padding:1.25rem;display:grid;gap:1rem}
    gets its own, because it is prose and should not compete for width. */
 .fkrow{display:flex;align-items:center;gap:.6rem}
 .edframe>header b{color:var(--accent);font-weight:650}
-.edframe>header .live{color:var(--dim);margin-left:auto;white-space:nowrap;
-                      overflow:hidden;text-overflow:ellipsis}
+/* Wraps between bytes rather than being cut off, like the monitor's payload. */
+.edframe>header .live{color:var(--dim);margin-left:auto;text-align:right}
 .fkdesc{display:block;margin-top:.3rem;font:11px/1.4 system-ui,-apple-system,sans-serif;
         color:var(--dim)}
 .fkdesc b{color:var(--fg);font-weight:600}
@@ -475,6 +503,10 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
         <span class="sw"><input type="checkbox" id="f-cols"><span></span></span>
         <span class="swtext">Length &amp; checksum<small>the structural columns</small></span>
       </label>
+      <span class="swrow">
+        <span class="seg numfmt" role="group" aria-label="Data bytes as"></span>
+        <span class="swtext">Data bytes as<small>here and in the profile editor</small></span>
+      </span>
     </div>
 
     <div id="mon" class="compact">
@@ -485,7 +517,7 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
               spellcheck="false" title="Show only this target, e.g. 21"></span>
         <span>CC CC<em>command</em><input id="f-cmd" placeholder="filter" autocomplete="off"
               spellcheck="false" title="Show only this command, e.g. 1000"></span>
-        <span>payload<em>data bytes</em><input id="f-pay" placeholder="filter" autocomplete="off"
+        <span>payload<em id="f-payfmt">data bytes</em><input id="f-pay" placeholder="filter" autocomplete="off"
               spellcheck="false" title="Show only payloads containing these bytes, e.g. 0C 00"></span>
         <span class="r c-crc">RR RR<em>checksum</em></span>
         <span>meaning<em>from profile</em><span class="fcount" id="fcount"></span></span>
@@ -851,6 +883,14 @@ code{font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--surface2);
         <option value="coffee_machine">Coffee machine</option>
         <option value="hood">Cooker hood</option>
       </select></label>
+    </div>
+
+    <div class="swgroup">
+      <span class="swrow">
+        <span class="seg numfmt" role="group" aria-label="Data bytes as"></span>
+        <span class="swtext">Data bytes and codes as<small>the profile stores codes in
+          decimal either way</small></span>
+      </span>
     </div>
 
     <div id="ed-frames"></div>
@@ -1640,6 +1680,120 @@ const lastPayload = {};
    profile does not mark is always shown. */
 const filters = { dest: '', cmd: '', pay: '', hideHidden: true, hideRepeats: false };
 
+/* ---- Data bytes as hex, decimal or binary ----
+
+   Hex is how the bus is written down, but not how everyone reads a byte: a code
+   of 6657 is 1A 01 on the wire, and that one bit flipped between 74 and 66 is
+   plain only as 01001010 and 01000010. So the data bytes -- the monitor's
+   payload and filter, the editor's payloads, codes and preview -- follow one
+   choice. Addresses and commands stay hex: they are names, not numbers, and the
+   profile writes them that way. The profile keeps storing codes in decimal, and
+   the downloads stay hex like the upstream logger's.
+
+   Remembered in this browser only, as the per-viewer convenience it is. */
+const NUM_FMTS = [['hex', 'Hex', 'hexadecimal'], ['dec', 'Dec', 'decimal'], ['bin', 'Bin', 'binary']];
+let numFmt = 'hex';
+try{ const s = localStorage.getItem('numFmt'); if(NUM_FMTS.some(([v]) => v === s)) numFmt = s; }catch(e){}
+const numFmtName = () => NUM_FMTS.find(([v]) => v === numFmt)[2];
+
+/* One byte as HTML, the same width whatever its value so the bytes line up. */
+function byteHtml(b){
+  if(numFmt === 'dec') return `<span class="by">${String(b).padStart(3)}</span>`;
+  if(numFmt === 'bin'){
+    const s = b.toString(2).padStart(8, '0');
+    return `<span class="by">${s.slice(0, 4)}<span class="nb"></span>${s.slice(4)}</span>`;
+  }
+  return `<span class="by">${hx(b)}</span>`;
+}
+/* Separated by real spaces, so a copied payload still reads as bytes. */
+const bytesHtml = bytes => bytes.map(byteHtml).join(' ');
+
+/* Whether a payload contains the filter's bytes. Hex keeps matching anywhere
+   with the spaces ignored, as it always did. Decimal compares whole bytes in a
+   row, because without the spaces 12 0 and 1 20 are the same digits. Binary
+   matches bits from the start of a byte on, so 0100 finds every byte whose
+   upper half is 0100. */
+function payMatches(bytes, filter){
+  if(numFmt === 'dec'){
+    const want = filter.trim().split(/[\s,]+/).map(Number);
+    if(want.some(n => !Number.isInteger(n))) return false;
+    for(let i = 0; i + want.length <= bytes.length; i++)
+      if(want.every((n, j) => bytes[i + j] === n)) return true;
+    return false;
+  }
+  if(numFmt === 'bin'){
+    const want = filter.replace(/\s/g, '');
+    const bits = bytes.map(b => b.toString(2).padStart(8, '0')).join('');
+    for(let i = 0; i + want.length <= bits.length; i += 8)
+      if(bits.startsWith(want, i)) return true;
+    return false;
+  }
+  return bytes.map(hx).join('').includes(filter.replace(/ /g, ''));
+}
+
+/* How many bits a code read by `op` has, and whether it is signed -- so a
+   negative reading of a signed op is shown, and typed, as the bit pattern on
+   the wire. null for the flag ops, whose codes are just 0 and 1. */
+function codeBits(op){
+  if(op === 'bit' || op === 'mask' || op === 'eq') return null;
+  const w = { u16be: 16, u16le: 16, i16be: 16, i16le: 16, u24be: 24, u32be: 32 }[op] || 8;
+  return { w, signed: op === 'i8' || op === 'i16be' || op === 'i16le' };
+}
+
+/* A code as it is shown in the editor: padded to the width of the op, binary in
+   nibbles. */
+function codeText(n, op){
+  const cb = codeBits(op);
+  if(typeof n !== 'number' || !Number.isInteger(n) || !cb || numFmt === 'dec') return String(n ?? '');
+  const u = n < 0 ? n + 2 ** cb.w : n;
+  if(numFmt === 'hex') return u.toString(16).toUpperCase().padStart(cb.w / 4, '0');
+  return u.toString(2).padStart(cb.w, '0').replace(/(.{4})(?=.)/g, '$1 ');
+}
+
+/* What a typed code means, as the number the profile stores; NaN when it is not
+   one. Bare digits are read in the chosen format. A 0x prefix is understood in
+   every format and 0b outside hex, where 0B is a number in its own right --
+   the editor took both before there was a choice, and still does. */
+function parseCode(s, op){
+  const t = String(s).trim().replace(/[\s_]/g, '');
+  if(t === '') return NaN;
+  let n;
+  if(/^-?0x[0-9a-f]+$/i.test(t)) n = parseInt(t.replace(/^-?0x/i, ''), 16) * (t.startsWith('-') ? -1 : 1);
+  else if(numFmt !== 'hex' && /^0b[01]+$/i.test(t)) n = parseInt(t.slice(2), 2);
+  else if(numFmt === 'hex') n = /^[0-9a-f]+$/i.test(t) ? parseInt(t, 16) : NaN;
+  else if(numFmt === 'bin') n = /^[01]+$/.test(t) ? parseInt(t, 2) : NaN;
+  else n = /^-?[0-9]+$/.test(t) ? Number(t) : NaN;
+  /* A pattern typed for a signed op is the two's complement on the wire: FF
+     for i8 is -1, which is what the device will compare against. */
+  const cb = codeBits(op);
+  const bare = numFmt !== 'dec' && !t.startsWith('-');
+  if(cb && cb.signed && bare && n >= 2 ** (cb.w - 1) && n < 2 ** cb.w) n -= 2 ** cb.w;
+  return n;
+}
+
+/* Every place that shows data bytes redraws from here. */
+function setNumFmt(fmt){
+  numFmt = fmt;
+  try{ localStorage.setItem('numFmt', fmt); }catch(e){}
+  drawNumFmt();
+  scheduleRebuild();
+  if(typeof draft !== 'undefined' && draft) renderEditor();
+}
+function drawNumFmt(){
+  for(const box of document.querySelectorAll('.numfmt')){
+    if(!box.children.length){
+      box.innerHTML = NUM_FMTS.map(([v, label, name]) =>
+        `<button type="button" data-fmt="${v}" title="${name}">${label}</button>`).join('');
+      box.onclick = ev => { const b = ev.target.closest('button'); if(b) setNumFmt(b.dataset.fmt); };
+    }
+    for(const b of box.children) b.setAttribute('aria-pressed', String(b.dataset.fmt === numFmt));
+  }
+  $('mon').classList.toggle('fmt-bin', numFmt === 'bin');
+  $('f-payfmt').textContent = `data bytes, ${numFmt}`;
+  $('f-pay').title = 'Show only payloads containing these bytes, e.g. '
+    + ({ hex: '0C 00', dec: '12 0', bin: '00001100 or just 0000' })[numFmt];
+}
+
 /* Frame keys seen on the wire, so the reference tables can bold the nibbles this
    machine actually uses. Just the identities -- no payload bookkeeping. */
 const seenKeys = new Set();
@@ -2420,7 +2574,7 @@ function rowFor(r){
     + `<span class="f-len c-len">${hx(r.l)}</span>`
     + `<span class="f-dest">${hx(dest)}</span>`
     + `<span class="f-cmd">${cmd === null ? '·· ··' : hx(bytes[0]) + ' ' + hx(bytes[1])}</span>`
-    + `<span>${pay.map(hx).join(' ') || '—'}${whole ? '' : ' …'}</span>`
+    + `<span class="f-pay">${bytesHtml(pay) || '—'}${whole ? '' : ' …'}</span>`
     + `<span class="f-crc c-crc">${crc === null ? '…' : hx(crc >> 8) + hx(crc & 0xff)}</span>`
     + `<span class="f-mean${known.length ? '' : ' none'}">`
       + `${hidden ? `<span class="hbtag">${esc(marker.name || 'hidden')}</span>` : ''}`
@@ -2469,8 +2623,13 @@ function rowFor(r){
            const on = known.filter(e => covers(e, i));
            const note = on.map(e => vals.has(e.id)
              ? `${esc(e.name)} = ${esc(vals.get(e.id))}` : esc(e.name)).join('<br>');
+           /* All three spellings, whichever the log is in: this is where a
+              byte is looked at closely, and the bit pattern is what tells a
+              flag from a count. */
+           const bits = b.toString(2).padStart(8, '0');
            return `<span class="pb${on.length ? ' used' : ''}"><i>byte ${i}</i> ${hx(b)} `
-                + `<b>${b}</b>${note ? `<u>${note}</u>` : ''}</span>`;
+                + `<b>${b}</b><s>${bits.slice(0, 4)} ${bits.slice(4)}</s>`
+                + `${note ? `<u>${note}</u>` : ''}</span>`;
          }).join('') + `</div>`
        : `<div style="margin-top:.4rem">Nothing beyond the command.</div>`;
 
@@ -2557,9 +2716,9 @@ function recPasses(r){
   if(filters.dest && !hx(r.d).includes(filters.dest)) return false;
   if(filters.cmd && (r.c < 0 || !(hx(r.c >> 8) + hx(r.c & 0xff)).includes(filters.cmd))) return false;
   const pay = payOf(r);
-  /* Spaces are stripped from both sides, so "0C00" finds a payload printed as
-     "0C 00" and nobody has to guess the separator. */
-  if(filters.pay && !pay.replace(/ /g, '').includes(filters.pay.replace(/ /g, ''))) return false;
+  /* Read in the format the payload is shown in (payMatches). */
+  if(filters.pay && !payMatches((r.x.slice(4).match(/../g) || []).map(h => parseInt(h, 16)), filters.pay))
+    return false;
   if(filters.hideHidden && hiddenMarkerFor(r.d, r.c < 0 ? null : r.c, pay)) return false;
   return true;
 }
@@ -2847,6 +3006,7 @@ for(const [id, key] of [['f-dest','dest'], ['f-cmd','cmd'], ['f-pay','pay']]){
 $('f-hb').onchange = ev => { filters.hideHidden = !ev.target.checked; scheduleRebuild(); };
 $('f-rep').onchange = ev => { filters.hideRepeats = !ev.target.checked; scheduleRebuild(); };
 $('f-cols').onchange = ev => { $('mon').classList.toggle('compact', !ev.target.checked); };
+drawNumFmt();
 
 function connectWs(){
   const ws = new WebSocket(`ws://${location.host}/api/v1/ws`);
@@ -3583,7 +3743,7 @@ function renderEditor(){
        was always visible. */
     head.innerHTML =
         `<div class="fkrow"><b title="${esc(describeKey(key))}">${key}</b>`
-      + `<span class="live">${pay ? 'payload ' + pay.map(hx).join(' ') : 'not seen yet'}</span></div>`;
+      + `<span class="live">${pay ? 'payload ' + bytesHtml(pay) : 'not seen yet'}</span></div>`;
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'btn ghost';
@@ -3850,16 +4010,17 @@ function entityEditor(e, pay){
      never quietly discards what it does not render. */
   let lk = e.transforms.find(t => t.op === 'lookup' || t.op === 'map');
 
-  /* Said out loud because everything around it is hex -- the payload on the
-     frame header, the byte in the preview line -- while these codes are the
-     decimal numbers the profile stores. Below ten the two agree, which is
-     exactly how the question goes unasked until a code like 35 turns out not to
-     be 0x35. Typing 0x23 is accepted and saved as 35. */
+  /* Said out loud: below ten hex and decimal agree, which is exactly how the
+     question goes unasked until a code like 35 turns out not to be 0x35. The
+     codes follow the same choice as the payload above, so the two can be
+     compared digit for digit; the profile stores decimal whatever is shown. */
   const valsLabel = document.createElement('div');
   valsLabel.className = 'edvalslabel';
-  valsLabel.textContent = 'Values — codes in decimal';
-  valsLabel.title = 'The payload above is hex; these are decimal, as the profile stores them. '
-                  + 'Typing 0x23 is understood and saved as 35.';
+  valsLabel.textContent = `Values — codes in ${numFmtName()}`;
+  valsLabel.title = 'Shown like the payload above; the profile stores them in decimal. '
+                  + (numFmt === 'hex' ? 'Type the hex digits, e.g. 1A01.'
+                     : numFmt === 'bin' ? 'Type the bits, e.g. 0001 1010; 0x1A is understood too.'
+                     : 'Typing 0x23 or 0b100011 is understood and saved as 35.');
   wrap.appendChild(valsLabel);
 
   const vals = document.createElement('div');
@@ -3875,18 +4036,23 @@ function entityEditor(e, pay){
      JSON. Only for numbers: counting down a word means nothing. */
   if(e.kind === 'sensor') wrap.appendChild(countdownEditor(e));
 
+  /* Codes as the rows show them: typed text, so a half-typed code survives a
+     redraw, and numbers from the profile spelled in the chosen format. */
   const asRules = () => {
     if(!lk) return [];
-    if(lk.op === 'lookup') return (lk.rules || []).map(r => [(r.in || [])[0], r.out]);
-    return Object.entries(lk.values || {});
+    const show = k => { const n = asInt(k); return n === null ? String(k ?? '') : codeText(n, e.extract.op); };
+    if(lk.op === 'lookup') return (lk.rules || []).map(r => [show((r.in || [])[0]), r.out]);
+    return Object.entries(lk.values || {}).map(([k, v]) => [show(strtod(k)), v]);
   };
 
   /* Saved as a lookup even when it came in as a map: a map has no way to say
      "leave the previous value alone", which is exactly the rule this editor
-     exists to let people write. */
+     exists to let people write. Codes are read in the chosen format and stored
+     as the decimal numbers the device compares. */
   const writeRules = pairs => {
-    const rules = pairs.filter(([k]) => k !== '' && k !== null && !Number.isNaN(Number(k)))
-                       .map(([k, v]) => ({ in: [Number(k)], out: v }));
+    const rules = pairs.map(([k, v]) => [parseCode(k, e.extract.op), v])
+                       .filter(([n]) => !Number.isNaN(n))
+                       .map(([n, v]) => ({ in: [n], out: v }));
     const fallback = lk && lk.op === 'lookup' && lk.default !== undefined ? lk.default : 'hold';
     if(lk) e.transforms = e.transforms.filter(t => t !== lk);
     lk = rules.length ? { op: 'lookup', rules, default: fallback } : null;
@@ -3908,6 +4074,12 @@ function entityEditor(e, pay){
       chip.innerHTML = `<input class="c" value="${esc(code)}" placeholder="code"> → `
                      + `<input class="t" value="${esc(text)}" placeholder="means">`
                      + `<button type="button" title="Remove">×</button>`;
+      /* As wide as the longest code the op can produce in this format -- a
+         16-bit code in binary is nineteen characters with its nibble gaps. */
+      const cb = codeBits(e.extract.op);
+      const chars = !cb ? 3 : numFmt === 'hex' ? cb.w / 4 : numFmt === 'bin' ? cb.w * 5 / 4 - 1
+                  : String(2 ** cb.w - 1).length + (cb.signed ? 1 : 0);
+      chip.querySelector('.c').style.width = `${Math.max(chars, 4) + 1}ch`;
       chip.querySelector('.c').oninput = ev => { pairs[i][0] = ev.target.value; writeRules(pairs); markDirty(); drawPreview(); };
       chip.querySelector('.t').oninput = ev => { pairs[i][1] = ev.target.value; writeRules(pairs); markDirty(); drawPreview(); };
       chip.querySelector('button').onclick = () => { pairs.splice(i, 1); writeRules(pairs); markDirty(); drawVals(); drawPreview(); };
@@ -3950,7 +4122,8 @@ function entityEditor(e, pay){
     const held = (readingById[e.id] || {}).value;
     const out = evalTransforms(raw, e.transforms, held);
     preview.className = 'edpreview' + (out === null ? ' miss' : '');
-    preview.innerHTML = `byte ${e.extract.at | 0} = ${hx(pay[e.extract.at | 0] ?? 0)} → raw ${esc(String(raw))} → `
+    preview.innerHTML = `byte ${e.extract.at | 0} = ${byteHtml(pay[e.extract.at | 0] ?? 0)}`
+      + ` → raw ${esc(typeof raw === 'number' ? codeText(raw, e.extract.op) : String(raw))} → `
       + (out === null ? '<b>no value</b>' : `<b>${esc(String(out))}</b>`);
   };
 
